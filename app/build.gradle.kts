@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -29,6 +30,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // java.time only exists from API 26. minSdk is 24, and the daily-puzzle and
+        // streak logic is written against LocalDate, so it is desugared in.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     buildFeatures {
@@ -38,10 +42,29 @@ android {
     testOptions {
         unitTests.all { it.useJUnitPlatform() }
     }
+
+    defaultConfig {
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+}
+
+// The exported Room schema is committed to app/schemas. It is what makes a migration
+// reviewable, and what lets Room verify that a migration produces the schema it claims -
+// which is the real content of the plan's "progress survives an app update" criterion.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
+
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.datastore.preferences)
+
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
@@ -55,6 +78,7 @@ dependencies {
 
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotest.assertions)
+    testImplementation(libs.kotlinx.coroutines.test)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 

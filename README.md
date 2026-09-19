@@ -11,14 +11,31 @@ Built against `nonogram-app-build-plan.md`. Phases run in order; see **Status** 
 
 | Phase | Scope | State |
 |---|---|---|
-| 1 | Puzzle engine — solver, generator, pack | **Complete**, 54 tests green |
-| 2 | Game screen | **Built**, 125 tests green — 3 criteria need a device |
-| 3 | Shell (daily, archive, progress) | Not started |
+| 1 | Puzzle engine — solver, generator, pack | **Complete** |
+| 2 | Game screen | **Built**, 2 criteria need a device |
+| 3 | Shell (daily, archive, progress) | **Built**, 2 criteria need a device |
 | 4 | Visual design and theming | Not started |
 | 5 | Monetization | Not started |
 | 6 | Hardening | Not started |
 | 7 | Store assets | Not started |
 | 8 | Publishing (human-operated) | **Start now, in parallel** — see below |
+
+**174 tests, 0 failures**, running in about 6 seconds.
+
+### Phase 3 acceptance criteria
+
+- [x] Daily selection is deterministic — same date yields the same puzzle across fresh
+      installs, with the hash pinned by test so past dailies can never silently move
+- [x] Streak increments, breaks and freezes correctly across simulated date changes,
+      unit-tested against an injected clock (37 tests) — no device date changes involved
+- [x] Archive filters over all 5,000 puzzles — **but "no jank while scrolling" is not
+      measured yet.** The index is built from record headers without decoding any grid,
+      and only visible thumbnails decode one; that should be enough, but it is a claim
+      about a real GPU, not a tested fact.
+- [ ] **Progress survives app kill, device restart and app update.** The snapshot codec
+      and repository logic are tested, and Room verifies its own SQL at compile time. The
+      DAO round-trip and a real process kill are not yet exercised. There is also only a
+      v1 schema so far, so there is no migration to test.
 
 ### Phase 2 acceptance criteria
 
@@ -79,9 +96,13 @@ app/src/main/kotlin/com/ganim/nonogram/
 │   ├── generator/   # PuzzleGenerator, GridShaper, DifficultyRater
 │   ├── pack/        # Binary pack codec
 │   └── tools/       # Offline generation entry point
+├── daily/           # DailySchedule, DailySelector, StreakCalculator, calendar screen
+├── archive/         # Browser over all 5,000 puzzles
 ├── data/
 │   ├── assets/      # PuzzlePackLoader - reads puzzles.bin
-│   └── session/     # GameSessionStore - autosave, folds into Room in Phase 3
+│   ├── db/          # Room entities, DAOs, database
+│   ├── repo/        # PuzzleRepository, ProgressRepository, SettingsRepository
+│   └── session/     # BoardSnapshotCodec - packs an in-progress board
 ├── game/            # Rules, input and rendering
 │   ├── GameState    # immutable board + lives + timer + undo
 │   ├── GameEngine   # every rule, as pure functions
@@ -92,7 +113,7 @@ app/src/main/kotlin/com/ganim/nonogram/
 │   ├── BoardCanvas  # one-pass Canvas rendering
 │   ├── BoardGestures# tap / drag / long-press / pinch
 │   └── GameViewModel
-├── ui/theme/        # Colour tokens; Phase 4 owns the real design
+├── ui/              # Navigation, settings screen, theme tokens, AppContainer
 └── MainActivity.kt
 ```
 
@@ -131,12 +152,17 @@ the plan's `com.<yourdomain>.nonogram`. It is a find-and-replace away right now 
 **permanently fixed the moment the app is first uploaded to Play**. Change it before
 Phase 8 if you want something else.
 
-**Haptics cannot be turned off yet.** Build plan §5.2 requires the setting; the Settings
-screen and DataStore belong to Phase 3 (§6.1), so the flag currently lives in memory and
-resets on launch.
+**The daily puzzle repeats about 14 times a year.** This is inherent to the plan's
+`hash(dateString) % poolSize` (§6.2): each day is an independent draw with no memory, so
+the birthday paradox applies — 104 Mondays and Tuesdays drawing from 900 easy 10×10
+puzzles will collide on their own. Measured over 2026: 14 repeats, slightly better than
+the ~19 chance would predict, so the hash is fine. The *formula* is the limit.
 
-**Phase 2 has no navigation.** The size buttons in the toolbar are a stand-in so all four
-grid sizes are reachable. Phase 3 replaces them with Daily, Archive and Settings.
+It is fixable without a server and without storing anything: number each spec's
+occurrences since an epoch date, then walk a deterministic permutation of the pool so
+every puzzle appears once before any repeats. That pushes the first repeat out to about
+8.6 years. Left alone for now because §6.2 specifies the formula explicitly — say the
+word and it is a small change.
 
 ---
 

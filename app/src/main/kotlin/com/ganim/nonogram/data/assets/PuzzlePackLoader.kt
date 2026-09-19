@@ -39,6 +39,9 @@ class PuzzlePackLoader(
      */
     fun decodeAll(): List<Puzzle> = PuzzlePack.decodeAll(bytes)
 
+    /** Shape and rating for every puzzle, without decoding any grids. */
+    fun summaries(): List<PuzzlePack.Summary> = PuzzlePack.summaries(bytes)
+
     /**
      * Finds a puzzle by id, decoding until it matches.
      *

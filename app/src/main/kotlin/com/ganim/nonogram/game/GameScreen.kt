@@ -53,7 +53,7 @@ import kotlin.math.roundToInt
 @Composable
 fun GameScreen(
     viewModel: GameViewModel,
-    onSizeChange: (Int) -> Unit,
+    onExit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -117,7 +117,7 @@ fun GameScreen(
             onToggleMode = viewModel::toggleMode,
             onUndo = viewModel::undo,
             onHint = { viewModel.useHint() },
-            onSizeChange = onSizeChange,
+            onExit = onExit,
         )
 
         Box(
@@ -158,7 +158,7 @@ fun GameScreen(
             if (resultsReveal.value > 0.01f) {
                 ResultsCard(
                     state = state,
-                    onNext = { onSizeChange(state.width) },
+                    onNext = onExit,
                     modifier = Modifier
                         .align(Alignment.Center)
                         .graphicsLayer {
@@ -187,11 +187,13 @@ private fun GameToolbar(
     onToggleMode: () -> Unit,
     onUndo: () -> Unit,
     onHint: () -> Unit,
-    onSizeChange: (Int) -> Unit,
+    onExit: () -> Unit,
 ) {
     val colors = LocalBoardColors.current
     Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onExit) { Text("‹ Back") }
+            Spacer(Modifier.width(4.dp))
             Text(
                 text = formatTime(state.elapsedMs),
                 style = MaterialTheme.typography.titleMedium,
@@ -226,14 +228,6 @@ private fun GameToolbar(
             }
         }
 
-        Spacer(Modifier.size(6.dp))
-
-        // Phase 2 stand-in for the archive (6.4), so every shipped size is reachable.
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf(5, 10, 15, 20).forEach { size ->
-                TextButton(onClick = { onSizeChange(size) }) { Text("${size}x$size") }
-            }
-        }
     }
 }
 
@@ -258,7 +252,7 @@ private fun ResultsCard(state: GameState, onNext: () -> Unit, modifier: Modifier
                 textAlign = TextAlign.Center,
             )
             Spacer(Modifier.size(4.dp))
-            Button(onClick = onNext) { Text("Next puzzle") }
+            Button(onClick = onNext) { Text("Done") }
         }
     }
 }

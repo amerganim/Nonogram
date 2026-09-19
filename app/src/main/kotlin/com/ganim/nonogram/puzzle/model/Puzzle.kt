@@ -114,11 +114,26 @@ data class Puzzle(
 
         private const val ID_BYTES = 10
 
-        fun stableId(width: Int, height: Int, solution: BooleanArray): String {
+        fun stableId(width: Int, height: Int, solution: BooleanArray): String =
+            stableIdFromBitset(width, height, Grid.toBitset(solution))
+
+        /**
+         * The same id, computed straight from an already-packed grid.
+         *
+         * Lets the archive index 5,000 puzzles without unpacking a single bitset into a
+         * BooleanArray or deriving a single clue list.
+         */
+        fun stableIdFromBitset(
+            width: Int,
+            height: Int,
+            bitset: ByteArray,
+            offset: Int = 0,
+            length: Int = bitset.size - offset,
+        ): String {
             val digest = MessageDigest.getInstance("SHA-256")
             digest.update(width.toByte())
             digest.update(height.toByte())
-            digest.update(Grid.toBitset(solution))
+            digest.update(bitset, offset, length)
             val hash = digest.digest()
             val sb = StringBuilder(ID_BYTES * 2)
             for (i in 0 until ID_BYTES) sb.append("%02x".format(hash[i]))

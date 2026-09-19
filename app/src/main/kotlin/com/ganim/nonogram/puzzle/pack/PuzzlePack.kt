@@ -129,6 +129,44 @@ object PuzzlePack {
         return Puzzle.fromSolution(width, height, cells, difficulty, solveDepth)
     }
 
+    /** A puzzle's shape and rating, without its grid or clues. */
+    data class Summary(
+        val index: Int,
+        val id: String,
+        val width: Int,
+        val height: Int,
+        val difficulty: Difficulty,
+        val solveDepth: Int,
+    )
+
+    /**
+     * Indexes the whole pack without decoding a single grid.
+     *
+     * The archive needs size, difficulty and id for all 5,000 puzzles to filter and to
+     * look up completion state. Going through [decodeAll] for that would unpack 5,000
+     * bitsets into BooleanArrays and derive 50,000 clue lists, all to read four fields.
+     * This reads the record headers and hashes the packed bytes in place.
+     */
+    fun summaries(bytes: ByteArray): List<Summary> {
+        val header = readHeader(bytes)
+        return List(header.count) { i ->
+            val offset = readU32(bytes, HEADER_BYTES + i * INDEX_ENTRY_BYTES)
+            val width = bytes[offset].toInt() and 0xFF
+            val height = bytes[offset + 1].toInt() and 0xFF
+            val bitsetLength = (width * height + 7) / 8
+            Summary(
+                index = i,
+                id = Puzzle.stableIdFromBitset(
+                    width, height, bytes, offset + RECORD_HEADER_BYTES, bitsetLength,
+                ),
+                width = width,
+                height = height,
+                difficulty = difficultyFor(bytes[offset + 2].toInt() and 0xFF),
+                solveDepth = bytes[offset + 3].toInt() and 0xFF,
+            )
+        }
+    }
+
     /** Byte size [encode] would produce, for checking against the plan's 1 MB ceiling. */
     fun estimatedSize(puzzles: List<Puzzle>): Int =
         HEADER_BYTES + puzzles.size * INDEX_ENTRY_BYTES +

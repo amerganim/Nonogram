@@ -3,7 +3,7 @@ package com.ganim.nonogram.game
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.ganim.nonogram.data.session.GameSessionStore
+import com.ganim.nonogram.data.repo.ProgressRepository
 import com.ganim.nonogram.puzzle.model.Puzzle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -40,9 +40,11 @@ enum class HapticKind {
  */
 class GameViewModel(
     puzzle: Puzzle,
-    private val sessionStore: GameSessionStore,
+    private val progress: ProgressRepository,
     private val hintProvider: HintProvider = HintProvider(),
     restored: GameState? = null,
+    /** Called when the puzzle is finished, so the daily screen can move the streak on. */
+    private val onCompleted: suspend (GameState) -> Unit = {},
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(restored ?: GameState.newGame(puzzle))
@@ -51,10 +53,7 @@ class GameViewModel(
     private val _haptics = MutableSharedFlow<HapticKind>(extraBufferCapacity = 8)
     val haptics: SharedFlow<HapticKind> = _haptics
 
-    /**
-     * Phase 2 keeps this in memory. The plan puts settings and DataStore in Phase 3
-     * (6.1), and persisting it here would mean building half that screen early.
-     */
+    /** Mirrors the persisted setting (6.1); the screen keeps it in sync. */
     var hapticsEnabled: Boolean = true
         private set
 
@@ -75,7 +74,24 @@ class GameViewModel(
         viewModelScope.launch {
             _state.collectLatest { snapshot ->
                 kotlinx.coroutines.delay(SAVE_DEBOUNCE_MS)
-                withContext(Dispatchers.IO) { runCatching { sessionStore.save(snapshot) } }
+                withContext(Dispatchers.IO) { runCatching { progress.save(snapshot) } }
+            }
+        }
+
+        // Completing is a one-off event, not a debounced save: the streak has to move
+        // the moment the last cell lands.
+        viewModelScope.launch {
+            var alreadyReported = restored?.status == GameStatus.COMPLETE
+            _state.collect { snapshot ->
+                if (snapshot.status == GameStatus.COMPLETE && !alreadyReported) {
+                    alreadyReported = true
+                    runCatching {
+                        progress.save(snapshot)
+                        onCompleted(snapshot)
+                    }
+                } else if (snapshot.status != GameStatus.COMPLETE) {
+                    alreadyReported = false
+                }
             }
         }
     }
@@ -108,7 +124,7 @@ class GameViewModel(
 
     fun saveNow() {
         val snapshot = _state.value
-        viewModelScope.launch(Dispatchers.IO) { runCatching { sessionStore.save(snapshot) } }
+        viewModelScope.launch(Dispatchers.IO) { runCatching { progress.save(snapshot) } }
     }
 
     // --- input -----------------------------------------------------------------------
@@ -171,8 +187,8 @@ class GameViewModel(
         emit(HapticKind.CONFIRM)
     }
 
-    fun toggleHaptics() {
-        hapticsEnabled = !hapticsEnabled
+    fun setHapticsEnabled(enabled: Boolean) {
+        hapticsEnabled = enabled
     }
 
     fun undo() {
@@ -234,12 +250,13 @@ class GameViewModel(
     /** Manual constructor injection, per the plan's "DI: Manual" decision. */
     class Factory(
         private val puzzle: Puzzle,
-        private val sessionStore: GameSessionStore,
+        private val progress: ProgressRepository,
         private val restored: GameState?,
+        private val onCompleted: suspend (GameState) -> Unit = {},
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            GameViewModel(puzzle, sessionStore, HintProvider(), restored) as T
+            GameViewModel(puzzle, progress, HintProvider(), restored, onCompleted) as T
     }
 
     private companion object {
