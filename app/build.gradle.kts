@@ -1,10 +1,14 @@
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.compose.compiler)
 }
 
 android {
     namespace = "com.ganim.nonogram"
-    compileSdk = 36
+    // Compose 1.12 requires compiling against API 37 or later. targetSdk stays at 36:
+    // compileSdk controls which APIs are available, targetSdk opts into new runtime
+    // behaviour, and Play currently requires 36 for new uploads.
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.ganim.nonogram"
@@ -27,12 +31,28 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    buildFeatures {
+        compose = true
+    }
+
     testOptions {
         unitTests.all { it.useJUnitPlatform() }
     }
 }
 
 dependencies {
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.ui)
+    implementation(libs.compose.ui.graphics)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.ui.tooling.preview)
+    debugImplementation(libs.compose.ui.tooling)
+
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotest.assertions)
     testRuntimeOnly(libs.junit.platform.launcher)

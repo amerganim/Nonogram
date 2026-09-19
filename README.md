@@ -12,13 +12,28 @@ Built against `nonogram-app-build-plan.md`. Phases run in order; see **Status** 
 | Phase | Scope | State |
 |---|---|---|
 | 1 | Puzzle engine — solver, generator, pack | **Complete**, 54 tests green |
-| 2 | Game screen | Not started |
+| 2 | Game screen | **Built**, 125 tests green — 3 criteria need a device |
 | 3 | Shell (daily, archive, progress) | Not started |
 | 4 | Visual design and theming | Not started |
 | 5 | Monetization | Not started |
 | 6 | Hardening | Not started |
 | 7 | Store assets | Not started |
 | 8 | Publishing (human-operated) | **Start now, in parallel** — see below |
+
+### Phase 2 acceptance criteria
+
+- [x] All four grid sizes lay out and are reachable (`BoardMetrics` unit-tested at each size)
+- [ ] **Sustained 60fps dragging on 20×20** — needs a device or emulator, not yet measured
+- [x] Drag-paint mode-locking and axis-snapping behave as specified (`DragTracker` tests)
+- [ ] **Kill mid-puzzle and relaunch** — the save/restore round-trip is unit-tested
+      including corrupt and truncated files, but not yet exercised on a real process kill
+- [x] Hint always returns a logically-deducible cell — verified by solving whole puzzles
+      by hint alone and re-deriving each one independently
+- [x] Undo reverses every action type including hint reveals
+
+Two criteria above are unticked on purpose. The logic behind them is tested; what is
+untested is the behaviour of a real Android process and a real GPU. Do not treat Phase 2
+as signed off until both are checked on hardware.
 
 ### Phase 1 acceptance criteria
 
@@ -58,17 +73,37 @@ The same seed and thread count produce a byte-identical pack on any machine.
 
 ```
 app/src/main/kotlin/com/ganim/nonogram/
-└── puzzle/          # Pure Kotlin, zero Android deps (enforced by test)
-    ├── model/       # Puzzle, Clue, Grid, CellState, Difficulty
-    ├── solver/      # LineSolver, PuzzleSolver, BacktrackingVerifier
-    ├── generator/   # PuzzleGenerator, GridShaper, DifficultyRater
-    ├── pack/        # Binary pack codec
-    └── tools/       # Offline generation entry point
+├── puzzle/          # Pure Kotlin, zero Android deps (enforced by test)
+│   ├── model/       # Puzzle, Clue, Grid, CellState, Difficulty
+│   ├── solver/      # LineSolver, PuzzleSolver, BacktrackingVerifier
+│   ├── generator/   # PuzzleGenerator, GridShaper, DifficultyRater
+│   ├── pack/        # Binary pack codec
+│   └── tools/       # Offline generation entry point
+├── data/
+│   ├── assets/      # PuzzlePackLoader - reads puzzles.bin
+│   └── session/     # GameSessionStore - autosave, folds into Room in Phase 3
+├── game/            # Rules, input and rendering
+│   ├── GameState    # immutable board + lives + timer + undo
+│   ├── GameEngine   # every rule, as pure functions
+│   ├── DragTracker  # mode lock and axis snap
+│   ├── ClueProgress # which clue groups are satisfied
+│   ├── HintProvider # picks a deducible cell
+│   ├── BoardMetrics # layout, zoom, pan (no Compose types, so it is unit-tested)
+│   ├── BoardCanvas  # one-pass Canvas rendering
+│   ├── BoardGestures# tap / drag / long-press / pinch
+│   └── GameViewModel
+├── ui/theme/        # Colour tokens; Phase 4 owns the real design
+└── MainActivity.kt
 ```
 
 `puzzle/` stays free of Android imports so it runs on a desktop JVM at full speed —
 that is what lets the generator and its tests be fast, and it is enforced rather than
 merely intended.
+
+The same instinct shapes `game/`: rules, input interpretation and layout arithmetic are
+plain Kotlin classes with no Compose types, so they are unit-tested directly instead of
+through a rendered frame. Only `BoardCanvas`, `BoardGestures` and `GameScreen` touch
+Compose.
 
 ---
 
@@ -96,9 +131,12 @@ the plan's `com.<yourdomain>.nonogram`. It is a find-and-replace away right now 
 **permanently fixed the moment the app is first uploaded to Play**. Change it before
 Phase 8 if you want something else.
 
-**This directory is not a git repository yet.** The plan calls for committing the
-generated pack (`app/src/main/assets/puzzles.bin`, 169 KB) so it is not rebuilt per
-developer. `.gitignore` is already written for it.
+**Haptics cannot be turned off yet.** Build plan §5.2 requires the setting; the Settings
+screen and DataStore belong to Phase 3 (§6.1), so the flag currently lives in memory and
+resets on launch.
+
+**Phase 2 has no navigation.** The size buttons in the toolbar are a stand-in so all four
+grid sizes are reachable. Phase 3 replaces them with Daily, Archive and Settings.
 
 ---
 
@@ -122,6 +160,15 @@ testers to land 12 should begin around Phase 3.
 
 ## Toolchain
 
-JDK 21 (Android Studio JBR), Gradle 9.7.1, AGP 9.4.1 (Kotlin support is built in — the
-separate `org.jetbrains.kotlin.android` plugin is an error from AGP 9.0), compileSdk 36,
-minSdk 24, targetSdk 36.
+JDK 21 (Android Studio JBR), Gradle 9.7.1, AGP 9.4.1, Compose BOM 2026.09.00.
+
+Two things that will bite anyone setting this up fresh:
+
+- **AGP 9 has built-in Kotlin support.** Applying `org.jetbrains.kotlin.android` is a
+  hard error. The separate `org.jetbrains.kotlin.plugin.compose` plugin is still
+  required whenever `buildFeatures.compose` is on.
+- **compileSdk is 37, targetSdk is 36.** Compose 1.12 refuses to compile against
+  anything below API 37. targetSdk stays at 36 because that is what Play currently
+  requires for new uploads; the two are independent.
+
+minSdk 24.
