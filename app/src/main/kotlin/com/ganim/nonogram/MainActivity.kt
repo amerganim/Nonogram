@@ -28,4 +28,16 @@ class MainActivity : ComponentActivity() {
             NonogramApp(container)
         }
     }
+
+    override fun onStart() {
+        super.onStart()
+        // Build plan 8.3: query and restore purchases on every launch, so entitlement
+        // survives a reinstall or a new device with nothing stored locally.
+        container.onAppForegrounded()
+    }
+
+    override fun onDestroy() {
+        if (isFinishing) container.onAppDestroyed()
+        super.onDestroy()
+    }
 }

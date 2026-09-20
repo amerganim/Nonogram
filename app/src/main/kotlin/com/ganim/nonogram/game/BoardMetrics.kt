@@ -30,17 +30,45 @@ data class BoardMetrics(
     val viewportWidth: Float,
     val viewportHeight: Float,
 ) {
+    /**
+     * Space left over once the board is laid out, split evenly so the board sits in the
+     * middle of its viewport.
+     *
+     * Without this a 10x10 on a tall phone is width-constrained, pinned to the top-left,
+     * and leaves a third of the screen blank below it while its last column touches the
+     * right edge. Seen on a real device; it looks like a rendering fault rather than a
+     * layout choice. Centring only applies when there is slack - a board that overflows
+     * and needs panning gets none.
+     */
+    val centreX: Float
+        get() = ((viewportWidth - (rowGutter + gridWidth)) / 2f).coerceAtLeast(0f)
+
+    val centreY: Float
+        get() = ((viewportHeight - (colGutter + gridHeight)) / 2f).coerceAtLeast(0f)
+
     /** Left edge of column 0, in viewport coordinates. */
-    val gridLeft: Float get() = rowGutter + panX
+    val gridLeft: Float get() = rowGutter + centreX + panX
 
     /** Top edge of row 0, in viewport coordinates. */
-    val gridTop: Float get() = colGutter + panY
+    val gridTop: Float get() = colGutter + centreY + panY
 
     val gridWidth: Float get() = columns * cellSize
     val gridHeight: Float get() = rows * cellSize
 
     fun cellLeft(col: Int): Float = gridLeft + col * cellSize
     fun cellTop(row: Int): Float = gridTop + row * cellSize
+
+    /** Left edge of the row-clue gutter, which travels with the centred board. */
+    val gutterLeft: Float get() = centreX
+
+    /** Top edge of the column-clue gutter. */
+    val gutterTop: Float get() = centreY
+
+    /** Right edge of the row-clue gutter: where the grid starts before any panning. */
+    val gutterRight: Float get() = centreX + rowGutter
+
+    /** Bottom edge of the column-clue gutter. */
+    val gutterBottom: Float get() = centreY + colGutter
 
     /** The cell under a viewport point, or null if the point is off the grid. */
     fun cellAt(x: Float, y: Float): CellRef? {
@@ -103,6 +131,9 @@ data class BoardMetrics(
         /** Gutters never shrink below this many cells, or single-digit clues look cramped. */
         const val MIN_GUTTER_CELLS = 1.2f
 
+        /** Breathing room around the whole board, in pixels. */
+        const val EDGE_MARGIN_PX = 12f
+
         /**
          * Lays the board out to fit [viewportWidth] x [viewportHeight] at zoom 1.
          *
@@ -123,9 +154,14 @@ data class BoardMetrics(
             val rowGutterCells = maxOf(longestRowClue * CLUE_SLOT_RATIO, MIN_GUTTER_CELLS)
             val colGutterCells = maxOf(longestColClue * CLUE_SLOT_RATIO, MIN_GUTTER_CELLS)
 
+            // A margin on every side. Without it the last column sits exactly on the
+            // screen edge, which reads as clipped even when it is not.
+            val usableWidth = (viewportWidth - 2 * EDGE_MARGIN_PX).coerceAtLeast(1f)
+            val usableHeight = (viewportHeight - 2 * EDGE_MARGIN_PX).coerceAtLeast(1f)
+
             val baseCell = minOf(
-                viewportWidth / (columns + rowGutterCells),
-                viewportHeight / (rows + colGutterCells),
+                usableWidth / (columns + rowGutterCells),
+                usableHeight / (rows + colGutterCells),
             ).coerceAtLeast(0f)
 
             val clampedZoom = zoom.coerceIn(MIN_ZOOM, MAX_ZOOM)

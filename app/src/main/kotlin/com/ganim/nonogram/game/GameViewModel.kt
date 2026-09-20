@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.ganim.nonogram.data.repo.ProgressRepository
+import com.ganim.nonogram.monetize.MonetizationRepository
 import com.ganim.nonogram.puzzle.model.Puzzle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -15,6 +16,18 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+/** What came of asking for a hint. */
+sealed interface HintResult {
+    /** A cell was revealed. */
+    data object Revealed : HintResult
+
+    /** The wallet is empty; the caller should offer a rewarded ad (8.2). */
+    data object NeedsMoreHints : HintResult
+
+    /** The board holds nothing further to deduce, so no hint was spent. */
+    data object NothingToReveal : HintResult
+}
 
 /** Something worth a tick of haptic feedback (build plan 5.2). */
 enum class HapticKind {
@@ -45,6 +58,8 @@ class GameViewModel(
     restored: GameState? = null,
     /** Called when the puzzle is finished, so the daily screen can move the streak on. */
     private val onCompleted: suspend (GameState) -> Unit = {},
+    /** Null when hints are free, which is what the tests use. */
+    private val monetization: MonetizationRepository? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(restored ?: GameState.newGame(puzzle))
@@ -201,16 +216,34 @@ class GameViewModel(
     }
 
     /**
-     * Reveals one deducible cell (5.4).
+     * Reveals one deducible cell, if the player has a hint to spend (5.4, 8.2).
      *
-     * @return false when nothing is left to deduce, so the caller can avoid spending a
-     * hint or showing a rewarded ad for nothing.
+     * Order matters. The board is checked *before* the wallet, so a player is never
+     * charged a hint - or shown a rewarded ad - for a puzzle that has nothing left to
+     * deduce.
      */
-    fun useHint(): Boolean {
-        val index = hintProvider.nextHint(_state.value) ?: return false
+    suspend fun useHint(): HintResult {
+        val index = hintProvider.nextHint(_state.value) ?: return HintResult.NothingToReveal
+        val monetization = this.monetization ?: run {
+            reveal(index)
+            return HintResult.Revealed
+        }
+        if (!monetization.spendHint()) return HintResult.NeedsMoreHints
+        reveal(index)
+        return HintResult.Revealed
+    }
+
+    /** Reveals a hint that was paid for by watching a rewarded ad. */
+    suspend fun useRewardedHint() {
+        monetization?.grantHintFromAd()
+        val index = hintProvider.nextHint(_state.value) ?: return
+        monetization?.spendHint()
+        reveal(index)
+    }
+
+    private fun reveal(index: Int) {
         _state.value = GameEngine.revealHint(_state.value, index)
         emit(HapticKind.CONFIRM)
-        return true
     }
 
     fun restoreLife() {
@@ -253,10 +286,11 @@ class GameViewModel(
         private val progress: ProgressRepository,
         private val restored: GameState?,
         private val onCompleted: suspend (GameState) -> Unit = {},
+        private val monetization: MonetizationRepository? = null,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            GameViewModel(puzzle, progress, HintProvider(), restored, onCompleted) as T
+            GameViewModel(puzzle, progress, HintProvider(), restored, onCompleted, monetization) as T
     }
 
     private companion object {

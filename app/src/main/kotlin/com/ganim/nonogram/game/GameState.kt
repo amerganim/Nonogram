@@ -50,6 +50,17 @@ data class GameState(
     val undoStack: List<UndoEntry>,
     /** The gesture currently being painted, accumulating changes until it ends. */
     val openGesture: UndoEntry? = null,
+    /**
+     * Set when a wrong cell is hit mid-drag, and cleared when the next gesture starts.
+     *
+     * Without it a single careless sweep costs every life at once: the drag keeps
+     * reporting cells, each one is painted, and each wrong one takes another life. On a
+     * real device that made one clumsy swipe end the game outright.
+     *
+     * Transient by design - it belongs to the gesture, not the puzzle, so it is never
+     * persisted and always starts false on a restored board.
+     */
+    val dragBlocked: Boolean = false,
 ) {
     val width: Int get() = puzzle.width
     val height: Int get() = puzzle.height
@@ -93,3 +104,45 @@ data class GameState(
         )
     }
 }
+
+/**
+ * The parts of a game the screen chrome needs, as plain values.
+ *
+ * The toolbar, the completion overlay and the board layout all have to be read during
+ * composition. Reading [GameState] there would recompose the whole screen on every
+ * painted cell; this holds only fields that change rarely, and it holds them as
+ * primitives so comparing two of them is trivial. Note the elapsed time is in whole
+ * seconds - at millisecond resolution the timer alone would recompose four times a
+ * second for a display that only changes once.
+ */
+data class GameChrome(
+    val puzzleId: String,
+    val width: Int,
+    val height: Int,
+    val longestRowClue: Int,
+    val longestColClue: Int,
+    val difficultyLabel: String,
+    val elapsedSeconds: Int,
+    val livesRemaining: Int,
+    val paintMode: PaintMode,
+    val canUndo: Boolean,
+    val status: GameStatus,
+) {
+    val isPlayable: Boolean get() = status == GameStatus.PLAYING
+    val mistakes: Int get() = GameState.MAX_LIVES - livesRemaining
+}
+
+/** Projects the chrome's view of this state. */
+fun GameState.chrome(): GameChrome = GameChrome(
+    puzzleId = puzzle.id,
+    width = puzzle.width,
+    height = puzzle.height,
+    longestRowClue = puzzle.rowClues.maxOf { it.values.size }.coerceAtLeast(1),
+    longestColClue = puzzle.colClues.maxOf { it.values.size }.coerceAtLeast(1),
+    difficultyLabel = puzzle.difficulty.name.lowercase(),
+    elapsedSeconds = (elapsedMs / 1000L).toInt(),
+    livesRemaining = livesRemaining,
+    paintMode = paintMode,
+    canUndo = canUndo,
+    status = status,
+)

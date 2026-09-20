@@ -12,10 +12,10 @@ Built against `nonogram-app-build-plan.md`. Phases run in order; see **Status** 
 | Phase | Scope | State |
 |---|---|---|
 | 1 | Puzzle engine — solver, generator, pack | **Complete** |
-| 2 | Game screen | **Built**, 2 criteria need a device |
-| 3 | Shell (daily, archive, progress) | **Built**, 2 criteria need a device |
-| 4 | Visual design and theming | **Built**, 1 criterion needs a device |
-| 5 | Monetization | Not started |
+| 2 | Game screen | **Built**, verified on device — 1 criterion missed |
+| 3 | Shell (daily, archive, progress) | **Built**, verified on device |
+| 4 | Visual design and theming | **Built**, verified on device |
+| 5 | Monetization | **Built**, policy tested; SDK paths need Play test tracks |
 | 6 | Hardening | Not started |
 | 7 | Store assets | Not started |
 | 8 | Publishing (human-operated) | **Start now, in parallel** — see below |
@@ -30,8 +30,9 @@ Built against `nonogram-app-build-plan.md`. Phases run in order; see **Status** 
 - [x] Contrast ratios meet WCAG AA — `ThemeContrastTest` computes WCAG 2.1 relative
       luminance for all 13 colour pairs in both themes, flattening translucent
       foregrounds first so the ratio reflects what is actually on screen
-- [ ] **Usable at 200% system font scale** — every size is in `sp` and the toolbar is
-      built so the least important label gives way first, but this needs a device
+- [x] Usable at 200% system font scale — confirmed on device. Fixing this found a real
+      defect: at 2× the "Undo" label wrapped inside its own button, so the control row
+      now stacks above 1.5× instead of being squeezed.
 - [x] No grid rendering regression — theming changed colour values only; the canvas
       still hoists its paints and allocates nothing per frame
 
@@ -44,29 +45,57 @@ Animation durations live in `Motion` so reduce-motion applies in one place.
       installs, with the hash pinned by test so past dailies can never silently move
 - [x] Streak increments, breaks and freezes correctly across simulated date changes,
       unit-tested against an injected clock (37 tests) — no device date changes involved
-- [x] Archive filters over all 5,000 puzzles — **but "no jank while scrolling" is not
-      measured yet.** The index is built from record headers without decoding any grid,
-      and only visible thumbnails decode one; that should be enough, but it is a claim
-      about a real GPU, not a tested fact.
-- [ ] **Progress survives app kill, device restart and app update.** The snapshot codec
-      and repository logic are tested, and Room verifies its own SQL at compile time. The
-      DAO round-trip and a real process kill are not yet exercised. There is also only a
-      v1 schema so far, so there is no migration to test.
+- [x] Archive lists all 5,000 with working filters and no jank — measured on device:
+      **476 frames, 1 janky (0.21%), p50 12 ms** over sustained flinging
+- [x] Progress survives app kill — confirmed on device. *App update* is still untested
+      in the sense that matters: there is only a v1 schema, so no migration exists yet.
+
+### Known performance gap
+
+**20×20 drag painting does not hold 60fps.** Measured on the Galaxy A15: p50 16 ms,
+p90 24 ms, 47% of frames past deadline.
+
+The useful finding is *where the cost is not*. A 10×10 board costs the same per update as
+a 20×20 — the work is not proportional to the number of cells, so it was never the
+drawing. Four rounds of draw-side optimisation (culling blank cells, recording the clue
+numbers into a replayable `Picture`, batching cross marks) cut measured draw stalls from
+108 frames to 15 but barely moved the headline number.
+
+What remains is per-update cost on the UI thread. Moving the board read out of
+composition and into the draw phase took p50 from 18 ms to 16 ms, which confirms the
+diagnosis without closing the gap. The likely remainder is `GameState` copying its whole
+board list on every painted cell; fixing that means changing the board representation
+from `List<CellState>` to a snapshot-backed array, which touches `GameEngine` and its
+tests. That is the next thing to try, and it should be done before Phase 6 hardening.
+
+One caveat on the measurement: these numbers come from `adb input swipe`, which injects
+events in bursts. Real finger input may behave differently, better or worse.
+
+### Phase 5 acceptance criteria
+
+- [x] Interstitial frequency caps enforced and unit-tested — every trigger other than
+      results-dismiss is provably incapable of showing one
+- [x] No-fill and airplane-mode paths grant the hint and never hang
+- [x] Debug builds use test ad units; a release built without real ones **fails the
+      build** rather than silently shipping test ads
+- [ ] Rewarded ads grant reliably — needs a device with a real AdMob account
+- [ ] `remove_ads` purchase, restore-on-reinstall and pending purchases — needs Play
+      test tracks
 
 ### Phase 2 acceptance criteria
 
-- [x] All four grid sizes lay out and are reachable (`BoardMetrics` unit-tested at each size)
-- [ ] **Sustained 60fps dragging on 20×20** — needs a device or emulator, not yet measured
-- [x] Drag-paint mode-locking and axis-snapping behave as specified (`DragTracker` tests)
-- [ ] **Kill mid-puzzle and relaunch** — the save/restore round-trip is unit-tested
-      including corrupt and truncated files, but not yet exercised on a real process kill
-- [x] Hint always returns a logically-deducible cell — verified by solving whole puzzles
-      by hint alone and re-deriving each one independently
-- [x] Undo reverses every action type including hint reveals
+Verified on a physical Galaxy A15 (SM-A155M, Android 16, 90 Hz display).
 
-Two criteria above are unticked on purpose. The logic behind them is tested; what is
-untested is the behaviour of a real Android process and a real GPU. Do not treat Phase 2
-as signed off until both are checked on hardware.
+- [x] All four grid sizes render and are playable — confirmed on device
+- [ ] **Sustained 60fps dragging on 20×20 — NOT MET.** Measured p50 16 ms, p90 24 ms,
+      47% of frames missing the device's 11.1 ms deadline. See "Known performance gap".
+- [x] Drag-paint mode-locking and axis-snapping — confirmed on device: a sweep with
+      deliberate vertical wobble painted one row only
+- [x] Kill mid-puzzle and relaunch restores board, timer, lives and undo — confirmed by
+      `am force-stop` mid-puzzle; the board came back with the timer frozen at 0:43, zero
+      lives and all three mistake cells intact
+- [x] Hint always returns a logically-deducible cell
+- [x] Undo reverses every action type including hint reveals
 
 ### Phase 1 acceptance criteria
 

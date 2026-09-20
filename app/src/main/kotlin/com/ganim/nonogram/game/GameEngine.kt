@@ -28,7 +28,11 @@ object GameEngine {
 
     /** Opens a new undo step. Every paint between here and [endGesture] undoes together. */
     fun beginGesture(state: GameState): GameState =
-        if (!state.isPlayable) state else state.copy(openGesture = UndoEntry(emptyList()))
+        if (!state.isPlayable) {
+            state
+        } else {
+            state.copy(openGesture = UndoEntry(emptyList()), dragBlocked = false)
+        }
 
     /**
      * Writes [target] into the cell at [index], if the rules allow it.
@@ -39,6 +43,9 @@ object GameEngine {
      */
     fun paint(state: GameState, index: Int, target: CellState): GameState {
         if (!state.isPlayable) return state
+        // A wrong cell earlier in this drag stops the rest of it. One careless sweep
+        // must cost one life, not three.
+        if (state.dragBlocked) return state
         if (index !in state.board.indices) return state
         if (index in state.mistakeCells) return state
 
@@ -71,9 +78,10 @@ object GameEngine {
             mistakeCells = state.mistakeCells + index,
             livesRemaining = lives,
             status = if (lives <= 0) GameStatus.OUT_OF_LIVES else state.status,
-            // The gesture ends here: a wrong cell stops the drag rather than letting it
-            // plough on through two more lives.
+            // The gesture ends here, and stays ended: a wrong cell stops the drag rather
+            // than letting it plough on through the remaining lives.
             openGesture = null,
+            dragBlocked = true,
         ).let { afterMistake ->
             if (state.openGesture != null && !state.openGesture.isEmpty) {
                 afterMistake.pushUndo(state.openGesture)
@@ -85,8 +93,8 @@ object GameEngine {
 
     /** Closes the open gesture, pushing it onto the undo stack unless it changed nothing. */
     fun endGesture(state: GameState): GameState {
-        val gesture = state.openGesture ?: return state
-        val closed = state.copy(openGesture = null)
+        val gesture = state.openGesture ?: return state.copy(dragBlocked = false)
+        val closed = state.copy(openGesture = null, dragBlocked = false)
         return if (gesture.isEmpty) closed else closed.pushUndo(gesture)
     }
 

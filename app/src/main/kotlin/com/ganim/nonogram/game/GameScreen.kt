@@ -3,6 +3,11 @@ package com.ganim.nonogram.game
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,25 +31,28 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import com.ganim.nonogram.ui.theme.LocalBoardColors
 import com.ganim.nonogram.ui.theme.LocalReduceMotion
 import com.ganim.nonogram.ui.theme.Motion
-import kotlin.math.roundToInt
 
 /**
  * The play screen (build plan 5).
@@ -58,11 +66,26 @@ fun GameScreen(
     viewModel: GameViewModel,
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Offers a rewarded ad and reports whether the reward was granted (8.2). */
+    onWatchAdForHint: suspend () -> Boolean = { false },
+    /** Offers a rewarded ad to restore a life (8.2). */
+    onWatchAdForLife: suspend () -> Boolean = { false },
+    /** Called when the results card is dismissed - the only interstitial moment (8.2). */
+    onResultsDismissed: suspend () -> Unit = {},
+    hintsRemaining: Int = 0,
 ) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
-    val highlight by viewModel.highlight.collectAsStateWithLifecycle()
+    // Held as State, not read with `by`. Reading the board during composition is what
+    // made every painted cell recompose the whole screen; the canvas reads it in the
+    // draw phase instead. Only the coarse values below are read here, each behind a
+    // derivedStateOf so the toolbar recomposes when the timer ticks, not when a cell
+    // changes.
+    val boardState = viewModel.state.collectAsStateWithLifecycle()
+    val highlightState = viewModel.highlight.collectAsStateWithLifecycle()
+    val state by remember { derivedStateOf { boardState.value.chrome() } }
     val colors = LocalBoardColors.current
     val view = LocalView.current
+    val scope = rememberCoroutineScope()
+    var offeringAdForHint by remember { mutableStateOf(false) }
 
     // Build plan 5.2: haptics on every cell state change, disableable in settings.
     LaunchedEffect(viewModel) {
@@ -78,18 +101,18 @@ fun GameScreen(
 
     var viewportWidth by remember { mutableStateOf(0) }
     var viewportHeight by remember { mutableStateOf(0) }
-    var zoom by remember(state.puzzle.id) { mutableStateOf(1f) }
-    var pan by remember(state.puzzle.id) { mutableStateOf(Offset.Zero) }
+    var zoom by remember(state.puzzleId) { mutableStateOf(1f) }
+    var pan by remember(state.puzzleId) { mutableStateOf(Offset.Zero) }
 
-    val metrics = remember(state.puzzle.id, viewportWidth, viewportHeight, zoom, pan) {
+    val metrics = remember(state.puzzleId, viewportWidth, viewportHeight, zoom, pan) {
         if (viewportWidth == 0 || viewportHeight == 0) {
             BoardMetrics.fit(state.width, state.height, 1, 1, 1f, 1f)
         } else {
             BoardMetrics.fit(
                 columns = state.width,
                 rows = state.height,
-                longestRowClue = state.puzzle.rowClues.maxOf { it.values.size }.coerceAtLeast(1),
-                longestColClue = state.puzzle.colClues.maxOf { it.values.size }.coerceAtLeast(1),
+                longestRowClue = state.longestRowClue,
+                longestColClue = state.longestColClue,
                 viewportWidth = viewportWidth.toFloat(),
                 viewportHeight = viewportHeight.toFloat(),
                 zoom = zoom,
@@ -116,11 +139,37 @@ fun GameScreen(
     }
 
     Column(modifier.fillMaxSize().background(colors.boardBackground).safeDrawingPadding()) {
+        // Only the fields the toolbar actually shows are passed in, as primitives.
+        // Handing it the whole GameState made it recompose on every painted cell during
+        // a drag - three buttons, two text nodes and a Canvas, sixty times a second, for
+        // values that had not changed. Measured on a Galaxy A15 that was a large part of
+        // the 20x20 drag cost.
         GameToolbar(
-            state = state,
+            elapsedSeconds = state.elapsedSeconds,
+            livesRemaining = state.livesRemaining,
+            paintMode = state.paintMode,
+            canUndo = state.canUndo,
+            isPlayable = state.isPlayable,
+            sizeLabel = state.width,
+            difficultyLabel = state.difficultyLabel,
             onToggleMode = viewModel::toggleMode,
             onUndo = viewModel::undo,
-            onHint = { viewModel.useHint() },
+            onHint = {
+                scope.launch {
+                    when (viewModel.useHint()) {
+                        // Out of hints: offer a rewarded ad. If no ad is available the
+                        // reward is granted anyway (8.2), so this never dead-ends.
+                        HintResult.NeedsMoreHints -> {
+                            offeringAdForHint = true
+                            if (onWatchAdForHint()) viewModel.useRewardedHint()
+                            offeringAdForHint = false
+                        }
+                        HintResult.Revealed, HintResult.NothingToReveal -> Unit
+                    }
+                }
+            },
+            hintsRemaining = hintsRemaining,
+            hintBusy = offeringAdForHint,
             onExit = onExit,
         )
 
@@ -134,7 +183,7 @@ fun GameScreen(
                 .boardInput(
                     metrics = { metrics },
                     enabled = state.isPlayable,
-                    restartKey = state.puzzle.id,
+                    restartKey = state.puzzleId,
                     onTap = viewModel::onTap,
                     onLongPress = { view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) },
                     onDragStart = viewModel::onDragStart,
@@ -152,9 +201,9 @@ fun GameScreen(
                 ),
         ) {
             BoardCanvas(
-                state = state,
+                boardState = boardState,
                 metrics = metrics,
-                highlight = highlight,
+                highlightState = highlightState,
                 gutterAlpha = gutterAlpha.value,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -162,7 +211,14 @@ fun GameScreen(
             if (resultsReveal.value > 0.01f) {
                 ResultsCard(
                     state = state,
-                    onNext = onExit,
+                    onNext = {
+                        // The interstitial placement from 8.2 - on results dismiss,
+                        // never mid-puzzle. AdPolicy decides whether one actually shows.
+                        scope.launch {
+                            onResultsDismissed()
+                            onExit()
+                        }
+                    },
                     modifier = Modifier
                         .align(Alignment.Center)
                         .graphicsLayer {
@@ -176,7 +232,13 @@ fun GameScreen(
 
             if (state.status == GameStatus.OUT_OF_LIVES) {
                 OutOfLivesCard(
-                    onRestoreLife = viewModel::restoreLife,
+                    onRestoreLife = {
+                        scope.launch {
+                            // Watching restores a life; a no-fill restores it too.
+                            onWatchAdForLife()
+                            viewModel.restoreLife()
+                        }
+                    },
                     onRestart = viewModel::restart,
                     modifier = Modifier.align(Alignment.Center),
                 )
@@ -187,11 +249,19 @@ fun GameScreen(
 
 @Composable
 private fun GameToolbar(
-    state: GameState,
+    elapsedSeconds: Int,
+    livesRemaining: Int,
+    paintMode: PaintMode,
+    canUndo: Boolean,
+    isPlayable: Boolean,
+    sizeLabel: Int,
+    difficultyLabel: String,
     onToggleMode: () -> Unit,
     onUndo: () -> Unit,
     onHint: () -> Unit,
     onExit: () -> Unit,
+    hintsRemaining: Int,
+    hintBusy: Boolean,
 ) {
     val colors = LocalBoardColors.current
     Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
@@ -199,21 +269,19 @@ private fun GameToolbar(
             TextButton(onClick = onExit) { Text("‹ Back") }
             Spacer(Modifier.width(4.dp))
             Text(
-                text = formatTime(state.elapsedMs),
+                text = formatTime(elapsedSeconds),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
             )
             Spacer(Modifier.width(12.dp))
-            Text(
-                text = "♥".repeat(state.livesRemaining) + "♡".repeat(GameState.MAX_LIVES - state.livesRemaining),
-                color = if (state.livesRemaining <= 1) MaterialTheme.colorScheme.error else colors.clueText,
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
+            LivesIndicator(
+                remaining = livesRemaining,
+                total = GameState.MAX_LIVES,
             )
             Spacer(Modifier.weight(1f))
             Text(
-                text = "${state.width}x${state.height} ${state.puzzle.difficulty.name.lowercase()}",
+                text = "${sizeLabel}x$sizeLabel $difficultyLabel",
                 style = MaterialTheme.typography.labelLarge,
                 color = colors.textMuted,
                 // At 200% font scale this label would otherwise shove the timer and the
@@ -228,24 +296,90 @@ private fun GameToolbar(
 
         Spacer(Modifier.size(8.dp))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            // The mode toggle is the most-used control, so it is the widest and leftmost.
-            FilledTonalButton(onClick = onToggleMode, modifier = Modifier.weight(1.4f)) {
-                Text(if (state.paintMode == PaintMode.FILL) "Fill" else "Cross")
+        // At large accessibility font scales three buttons no longer fit across the
+        // screen, and squeezing them breaks "Undo" onto two lines inside its own button.
+        // Past 1.5x they get a row each instead. Section 7 requires the app stay usable
+        // at 200%, and usable means the controls still read as controls.
+        val stacked = LocalDensity.current.fontScale >= STACK_CONTROLS_FONT_SCALE
+
+        val modeButton: @Composable (Modifier) -> Unit = { mod ->
+            // The mode toggle is the most-used control, so it leads and takes most room.
+            FilledTonalButton(onClick = onToggleMode, modifier = mod) {
+                Text(if (paintMode == PaintMode.FILL) "Fill" else "Cross", maxLines = 1)
             }
-            OutlinedButton(onClick = onUndo, enabled = state.canUndo, modifier = Modifier.weight(1f)) {
-                Text("Undo")
+        }
+        val undoButton: @Composable (Modifier) -> Unit = { mod ->
+            OutlinedButton(onClick = onUndo, enabled = canUndo, modifier = mod) {
+                Text("Undo", maxLines = 1)
             }
-            OutlinedButton(onClick = onHint, enabled = state.isPlayable, modifier = Modifier.weight(1f)) {
-                Text("Hint")
+        }
+        val hintButton: @Composable (Modifier) -> Unit = { mod ->
+            OutlinedButton(onClick = onHint, enabled = isPlayable && !hintBusy, modifier = mod) {
+                // Showing the count makes the free-hint economy legible instead of the
+                // button silently turning into an ad prompt.
+                Text(if (hintsRemaining > 0) "Hint $hintsRemaining" else "Hint", maxLines = 1)
+            }
+        }
+
+        if (stacked) {
+            Column(
+                Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                modeButton(Modifier.fillMaxWidth())
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    undoButton(Modifier.weight(1f))
+                    hintButton(Modifier.weight(1f))
+                }
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                modeButton(Modifier.weight(1.4f))
+                undoButton(Modifier.weight(1f))
+                hintButton(Modifier.weight(1f))
             }
         }
 
     }
 }
 
+/**
+ * The three lives, drawn rather than typed.
+ *
+ * A heart character renders as a colour emoji on most Android builds, which is loud,
+ * ignores the theme entirely, and reads as a casual game - the exact look section 7
+ * tells us to avoid. Two circles do the job and inherit the palette.
+ */
 @Composable
-private fun ResultsCard(state: GameState, onNext: () -> Unit, modifier: Modifier = Modifier) {
+private fun LivesIndicator(remaining: Int, total: Int) {
+    val colors = LocalBoardColors.current
+    val spent = colors.textMuted
+    val alive = if (remaining <= 1) MaterialTheme.colorScheme.error else colors.accent
+
+    Canvas(
+        Modifier
+            .height(20.dp)
+            .width((total * 18).dp)
+            .semantics { contentDescription = "$remaining of $total lives remaining" },
+    ) {
+        val radius = size.height / 2.6f
+        val step = size.width / total
+        repeat(total) { index ->
+            val centre = Offset(step * index + step / 2f, size.height / 2f)
+            if (index < remaining) {
+                drawCircle(alive, radius, centre)
+            } else {
+                drawCircle(spent, radius, centre, style = Stroke(width = radius * 0.36f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ResultsCard(state: GameChrome, onNext: () -> Unit, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(20.dp),
@@ -257,10 +391,9 @@ private fun ResultsCard(state: GameState, onNext: () -> Unit, modifier: Modifier
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text("Solved", style = MaterialTheme.typography.titleMedium)
-            Text(formatTime(state.elapsedMs), style = MaterialTheme.typography.titleMedium)
+            Text(formatTime(state.elapsedSeconds), style = MaterialTheme.typography.titleMedium)
             Text(
-                "${GameState.MAX_LIVES - state.livesRemaining} mistakes  ·  " +
-                    state.puzzle.difficulty.name.lowercase(),
+                "${state.mistakes} mistakes  ·  ${state.difficultyLabel}",
                 style = MaterialTheme.typography.labelLarge,
                 textAlign = TextAlign.Center,
             )
@@ -295,9 +428,8 @@ private fun OutOfLivesCard(
     }
 }
 
-private fun formatTime(elapsedMs: Long): String {
-    val totalSeconds = (elapsedMs / 1000.0).roundToInt()
-    val minutes = totalSeconds / 60
-    val seconds = totalSeconds % 60
-    return "%d:%02d".format(minutes, seconds)
-}
+private fun formatTime(totalSeconds: Int): String =
+    "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
+
+/** Past this font scale the control row is stacked instead of squeezed. */
+private const val STACK_CONTROLS_FONT_SCALE = 1.5f

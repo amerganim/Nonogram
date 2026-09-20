@@ -19,16 +19,26 @@ import com.ganim.nonogram.puzzle.model.Clue
 object ClueProgress {
 
     /** One flag per clue value, in order, true when that group is definitely placed. */
-    fun satisfied(clue: Clue, line: List<CellState>): List<Boolean> {
+    fun satisfied(clue: Clue, line: List<CellState>): List<Boolean> =
+        satisfied(clue, line.size) { line[it] }
+
+    /**
+     * The same, reading cells through [cellAt] instead of from a materialised list.
+     *
+     * The board is a flat row-major list, so a column would otherwise have to be copied
+     * out before it could be checked. At 20x20 that is 40 short-lived lists every time a
+     * cell changes, which during a drag is every few frames.
+     */
+    fun satisfied(clue: Clue, length: Int, cellAt: (Int) -> CellState): List<Boolean> {
         val values = clue.values
         if (values.isEmpty()) return emptyList()
 
         val done = BooleanArray(values.size)
-        val matchedFromLeft = scan(values, line, done, fromLeft = true)
+        val matchedFromLeft = scan(values, length, cellAt, done, fromLeft = true)
 
         // Only scan back from the right for groups the left pass did not already claim,
         // or a fully solved line would match the same group twice.
-        scan(values, line, done, fromLeft = false, stopAtIndex = matchedFromLeft)
+        scan(values, length, cellAt, done, fromLeft = false, stopAtIndex = matchedFromLeft)
 
         return done.toList()
     }
@@ -44,19 +54,20 @@ object ClueProgress {
      */
     private fun scan(
         values: List<Int>,
-        line: List<CellState>,
+        length: Int,
+        cellAt: (Int) -> CellState,
         done: BooleanArray,
         fromLeft: Boolean,
         stopAtIndex: Int = 0,
     ): Int {
-        val n = line.size
+        val n = length
         val k = values.size
         var matched = 0
         var at = 0
 
         while (at < n && matched < k - stopAtIndex) {
             val position = if (fromLeft) at else n - 1 - at
-            val cell = line[position]
+            val cell = cellAt(position)
 
             // Past an unknown cell nothing can be asserted.
             if (cell == CellState.UNKNOWN) break
@@ -69,7 +80,7 @@ object ClueProgress {
             var runLength = 0
             while (at + runLength < n) {
                 val p = if (fromLeft) at + runLength else n - 1 - (at + runLength)
-                if (line[p] != CellState.FILLED) break
+                if (cellAt(p) != CellState.FILLED) break
                 runLength++
             }
 
@@ -77,7 +88,7 @@ object ClueProgress {
             val afterIndex = at + runLength
             val closed = afterIndex >= n || run {
                 val p = if (fromLeft) afterIndex else n - 1 - afterIndex
-                line[p].isKnownEmpty
+                cellAt(p).isKnownEmpty
             }
             if (!closed) break
 

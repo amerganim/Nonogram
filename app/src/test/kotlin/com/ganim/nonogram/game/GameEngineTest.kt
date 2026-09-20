@@ -114,11 +114,53 @@ class GameEngineTest {
         state = GameEngine.paint(state, idx(0, 0), CellState.FILLED)  // correct
         state = GameEngine.paint(state, idx(0, 1), CellState.FILLED)  // wrong
         state.openGesture shouldBe null
+        state.dragBlocked shouldBe true
         state.livesRemaining shouldBe GameState.MAX_LIVES - 1
 
         // The cells painted before the mistake are still undoable as one step.
         state.undoStack.size shouldBe 1
         state.undoStack.last().changes.map { it.index } shouldBe listOf(idx(0, 0))
+    }
+
+    @Test
+    @DisplayName("one careless sweep costs one life, not three")
+    fun `a drag across several wrong cells costs a single life`() {
+        // Found on a real device: dragging across row 0 of a puzzle whose first row is
+        // mostly empty ended the game outright. Clearing the gesture marker was not
+        // enough, because the drag kept reporting cells and paint kept accepting them.
+        var state = GameEngine.beginGesture(newGame())
+        // (0,1) is empty in the solution; so are (1,0) and (1,2).
+        listOf(idx(0, 1), idx(1, 0), idx(1, 2)).forEach { cell ->
+            state = GameEngine.paint(state, cell, CellState.FILLED)
+        }
+        state = GameEngine.endGesture(state)
+
+        state.livesRemaining shouldBe GameState.MAX_LIVES - 1
+        state.mistakeCells shouldBe setOf(idx(0, 1))
+        state.status shouldBe GameStatus.PLAYING
+    }
+
+    @Test
+    fun `the next gesture after a blocked one paints normally`() {
+        var state = GameEngine.beginGesture(newGame())
+        state = GameEngine.paint(state, idx(0, 1), CellState.FILLED) // wrong, blocks
+        state = GameEngine.endGesture(state)
+        state.dragBlocked shouldBe false
+
+        state = GameEngine.beginGesture(state)
+        state = GameEngine.paint(state, idx(0, 0), CellState.FILLED) // correct
+        state = GameEngine.endGesture(state)
+        state.board[idx(0, 0)] shouldBe CellState.FILLED
+        state.livesRemaining shouldBe GameState.MAX_LIVES - 1
+    }
+
+    @Test
+    fun `three separate wrong taps still end the game`() {
+        // The block is per-gesture, so deliberate repeated mistakes must still cost.
+        var state = newGame()
+        listOf(idx(0, 1), idx(1, 0), idx(1, 2)).forEach { state = GameEngine.tap(state, it) }
+        state.livesRemaining shouldBe 0
+        state.status shouldBe GameStatus.OUT_OF_LIVES
     }
 
     // --- gestures and undo -----------------------------------------------------------

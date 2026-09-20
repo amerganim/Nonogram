@@ -1,5 +1,12 @@
 package com.ganim.nonogram.ui
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.dp
+import com.ganim.nonogram.ui.theme.LocalBoardColors
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.NavigationBar
@@ -14,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.activity.compose.LocalActivity
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -28,6 +36,8 @@ import com.ganim.nonogram.daily.DailyViewModel
 import com.ganim.nonogram.data.repo.Settings
 import com.ganim.nonogram.game.GameScreen
 import com.ganim.nonogram.game.GameViewModel
+import com.ganim.nonogram.monetize.AdTrigger
+import com.ganim.nonogram.monetize.RewardPolicy
 import com.ganim.nonogram.ui.theme.NonogramTheme
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -43,13 +53,63 @@ private object Routes {
         "game/$puzzleId?date=${date?.toString().orEmpty()}"
 }
 
-private data class Destination(val route: String, val label: String)
+/**
+ * The nav glyphs are drawn rather than imported.
+ *
+ * Material's icon artifacts are deprecated out of Material 3, and a stock icon set would
+ * pull the bar towards the generic-app look section 7 steers away from. Three small
+ * geometric marks - a calendar, a grid of cells, a set of sliders - cost nothing, scale
+ * with the theme, and echo the board itself.
+ */
+private enum class NavGlyph { CALENDAR, GRID, SLIDERS }
+
+private data class Destination(val route: String, val label: String, val glyph: NavGlyph)
 
 private val destinations = listOf(
-    Destination(Routes.DAILY, "Daily"),
-    Destination(Routes.ARCHIVE, "Archive"),
-    Destination(Routes.SETTINGS, "Settings"),
+    Destination(Routes.DAILY, "Daily", NavGlyph.CALENDAR),
+    Destination(Routes.ARCHIVE, "Archive", NavGlyph.GRID),
+    Destination(Routes.SETTINGS, "Settings", NavGlyph.SLIDERS),
 )
+
+@Composable
+private fun NavIcon(glyph: NavGlyph, selected: Boolean) {
+    val colors = LocalBoardColors.current
+    val tint = if (selected) colors.accent else colors.textMuted
+    Canvas(Modifier.size(22.dp)) {
+        val stroke = size.minDimension * 0.10f
+        when (glyph) {
+            NavGlyph.CALENDAR -> {
+                drawRect(tint, style = Stroke(width = stroke))
+                // The header band, as on a wall calendar.
+                drawRect(tint, size = Size(size.width, size.height * 0.26f))
+            }
+
+            NavGlyph.GRID -> {
+                val cell = size.width * 0.42f
+                val gap = size.width - cell * 2f
+                listOf(0f to 0f, (cell + gap) to 0f, 0f to (cell + gap), (cell + gap) to (cell + gap))
+                    .forEachIndexed { index, (x, y) ->
+                        // Two filled, two outlined - a half-solved puzzle in miniature.
+                        if (index % 3 == 0) {
+                            drawRect(tint, Offset(x, y), Size(cell, cell))
+                        } else {
+                            drawRect(tint, Offset(x, y), Size(cell, cell), style = Stroke(stroke))
+                        }
+                    }
+            }
+
+            NavGlyph.SLIDERS -> {
+                val rows = 3
+                repeat(rows) { index ->
+                    val y = size.height * (index + 0.5f) / rows
+                    drawLine(tint, Offset(0f, y), Offset(size.width, y), strokeWidth = stroke)
+                    val knobX = size.width * (if (index == 1) 0.72f else 0.32f)
+                    drawCircle(tint, radius = stroke * 1.6f, center = Offset(knobX, y))
+                }
+            }
+        }
+    }
+}
 
 /**
  * Single Activity, Compose Navigation, three top-level destinations (build plan 6.1).
@@ -62,7 +122,10 @@ private val destinations = listOf(
 fun NonogramApp(container: AppContainer) {
     val settings by container.settings.settings.collectAsState(initial = Settings())
     val completedCount by container.progress.observeCompletedCount().collectAsState(initial = 0)
+    val entitlements by container.billing.entitlements.collectAsState()
+    val wallet by container.monetization.wallet.collectAsState(initial = null)
     val scope = rememberCoroutineScope()
+    val activity = LocalActivity.current
 
     NonogramTheme(
         darkTheme = settings.darkThemeOverride
@@ -81,7 +144,12 @@ fun NonogramApp(container: AppContainer) {
                             NavigationBarItem(
                                 selected = currentRoute == destination.route,
                                 onClick = { navigateTop(navController, destination.route) },
-                                icon = {},
+                                icon = {
+                                    NavIcon(
+                                        glyph = destination.glyph,
+                                        selected = currentRoute == destination.route,
+                                    )
+                                },
                                 label = { Text(destination.label) },
                             )
                         }
@@ -165,6 +233,7 @@ fun NonogramApp(container: AppContainer) {
                                     container.progress.completeDaily(dailyDate, puzzle.id)
                                 }
                             },
+                            monetization = container.monetization,
                         ),
                     )
                     LaunchedEffect(model) { model.onResume() }
@@ -175,6 +244,27 @@ fun NonogramApp(container: AppContainer) {
                     GameScreen(
                         viewModel = model,
                         onExit = { navController.popBackStack() },
+                        hintsRemaining = wallet?.let {
+                            it.freeRemaining + it.purchasedRemaining
+                        } ?: 0,
+                        onWatchAdForHint = {
+                            val host = activity ?: return@GameScreen false
+                            RewardPolicy.shouldGrant(container.ads.showRewarded(host))
+                        },
+                        onWatchAdForLife = {
+                            val host = activity ?: return@GameScreen false
+                            RewardPolicy.shouldGrant(container.ads.showRewarded(host))
+                        },
+                        onResultsDismissed = {
+                            container.ads.onPuzzleCompleted()
+                            activity?.let { host ->
+                                container.ads.maybeShowInterstitial(
+                                    activity = host,
+                                    trigger = AdTrigger.RESULTS_DISMISSED,
+                                    adFree = entitlements.adFree,
+                                )
+                            }
+                        },
                     )
                 }
             }

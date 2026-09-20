@@ -19,6 +19,8 @@ navigationCompose = "2.10.1"
 datastore = "1.2.1"
 room = "2.8.5"
 ksp = "2.3.12"
+playServicesAds = "25.5.0"
+billing = "9.1.0"
 coroutinesTest = "1.10.2"
 
 [libraries]
@@ -30,6 +32,10 @@ desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version.ref 
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
 androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+play-services-ads = { module = "com.google.android.gms:play-services-ads", version.ref = "playServicesAds" }
+# Play deprecates old Billing versions on a schedule and rejects uploads built against
+# them, so check this is still current before each release (build plan 2).
+billing-ktx = { module = "com.android.billingclient:billing-ktx", version.ref = "billing" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
 androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
