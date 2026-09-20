@@ -1,13 +1,17 @@
 package com.ganim.nonogram.ui.theme
 
+import android.app.Activity
 import android.provider.Settings
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 
 /**
  * The app theme (build plan section 7).
@@ -65,6 +69,21 @@ fun NonogramTheme(
                 1f,
             ) == 0f
         }.getOrDefault(false)
+    }
+
+    // The system draws the clock and battery over our background, and it picks their
+    // colour from this flag rather than from what is behind them. Without it the light
+    // theme ships with white status icons on cream paper - invisible, and only findable
+    // by looking at a real device.
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as? Activity)?.window ?: return@SideEffect
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !darkTheme
+                isAppearanceLightNavigationBars = !darkTheme
+            }
+        }
     }
 
     CompositionLocalProvider(

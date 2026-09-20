@@ -93,7 +93,7 @@ fun SettingsScreen(
                     checked = settings.hapticsEnabled,
                     onCheckedChange = onHapticsChanged,
                     colors = SwitchDefaults.colors(
-                        checkedThumbColor = colors.onAccent,
+                        checkedThumbColor = colors.onAccentFill,
                         checkedTrackColor = colors.success,
                         checkedBorderColor = colors.success,
                         uncheckedThumbColor = colors.textMuted,
@@ -218,15 +218,15 @@ private fun Segment(
         modifier
             .height(44.dp)
             .clip(shape)
-            .background(if (selected) colors.accent else Color.Transparent)
-            .then(if (selected) Modifier else Modifier.border(1.dp, colors.stroke, shape))
+            .background(if (selected) colors.accentFill else Color.Transparent)
+            .border(1.dp, if (selected) colors.accentDeep else colors.stroke, shape)
             .clickable(role = Role.RadioButton, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
             style = MaterialTheme.typography.labelLarge,
-            color = if (selected) colors.onAccent else colors.textMuted,
+            color = if (selected) colors.onAccentFill else colors.textMuted,
         )
     }
 }

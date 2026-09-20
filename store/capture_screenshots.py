@@ -160,7 +160,9 @@ def find_grid(image_path: str) -> tuple[int, int, float] | None:
     im = Image.open(image_path).convert("RGB")
     px = im.load()
     w, h = im.size
-    major = (105, 115, 124)  # gridLineMajor, dark theme
+    # gridLineMajor, dark theme. Tied to ui/theme/Color.kt: when the palette moves,
+    # this moves with it, or the finder silently reports "no board on screen".
+    major = (144, 132, 224)
 
     def near(c):
         return all(abs(c[i] - major[i]) <= 22 for i in range(3))

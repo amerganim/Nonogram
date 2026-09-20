@@ -42,6 +42,7 @@ enum class Glyph(val path: String, val filled: Boolean = false) {
     HEART("M12 20.2S4.6 15.4 4.6 10.5A3.9 3.9 0 0 1 12 8.2a3.9 3.9 0 0 1 7.4 2.3c0 4.9-7.4 9.7-7.4 9.7z"),
     CLOCK("M20.6 12a8.6 8.6 0 1 1-17.2 0 8.6 8.6 0 0 1 17.2 0z M12 6.8V12.2L15.8 14.2"),
     BACK("M14.6 4.8 7.6 12 14.6 19.2"),
+    FORWARD("M9.4 4.8 16.4 12 9.4 19.2"),
     UNDO("M4.2 9.4h9.4a5.2 5.2 0 0 1 0 10.4H8.4 M8 4.8 3.4 9.4 8 14"),
     SPARK(
         "M11 3.2l1.9 4.7 4.7 1.9-4.7 1.9L11 16.4l-1.9-4.7L4.4 9.8l4.7-1.9z " +
@@ -66,6 +67,10 @@ enum class Glyph(val path: String, val filled: Boolean = false) {
 
     // Solid marks: at 18dp an outlined triangle or square turns to mush.
     PLAY("M8.4 5.2l11 6.8-11 6.8z", filled = true),
+    HEART_SOLID(
+        "M12 20.2S4.6 15.4 4.6 10.5A3.9 3.9 0 0 1 12 8.2a3.9 3.9 0 0 1 7.4 2.3c0 4.9-7.4 9.7-7.4 9.7z",
+        filled = true,
+    ),
     SQUARE("M19.6 4.4H4.4v15.2h15.2z", filled = true),
     ;
 }

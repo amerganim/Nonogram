@@ -220,7 +220,7 @@ private fun Tab(
 ) {
     val colors = LocalBoardColors.current
     val shape = RoundedCornerShape(15.dp)
-    val content = if (active) colors.onAccent else colors.textMuted
+    val content = if (active) colors.onAccentFill else colors.textMuted
     Row(
         modifier
             .height(44.dp)
@@ -282,7 +282,7 @@ private fun FilterChip(label: String, selected: Boolean, tint: Color, onClick: (
             .height(38.dp)
             .clip(shape)
             .background(if (selected) tint else Color.Transparent)
-            .then(if (selected) Modifier else Modifier.border(1.dp, colors.stroke, shape))
+            .border(1.dp, if (selected) colors.accentDeep else colors.stroke, shape)
             .clickable(onClick = onClick)
             .padding(horizontal = 15.dp),
         contentAlignment = Alignment.Center,
@@ -290,7 +290,7 @@ private fun FilterChip(label: String, selected: Boolean, tint: Color, onClick: (
         Text(
             label,
             style = MaterialTheme.typography.labelLarge,
-            color = if (selected) colors.onAccent else colors.textMuted,
+            color = if (selected) colors.onAccentFill else colors.textMuted,
             maxLines = 1,
         )
     }
@@ -311,7 +311,7 @@ private fun ArchiveThumbnail(
 ) {
     val colors = LocalBoardColors.current
     val revealed = entry.completed && entry.name.isNotEmpty()
-    val tint = if (entry.collection == PuzzleCollection.PICTURE) colors.collection else colors.accent
+    val tint = if (entry.collection == PuzzleCollection.PICTURE) colors.collection else colors.accentFill
     val shape = RoundedCornerShape(18.dp)
     Column(
         Modifier
@@ -358,7 +358,7 @@ private fun ArchiveThumbnail(
                     Text(
                         "···",
                         style = MaterialTheme.typography.labelMedium,
-                        color = colors.onAccent,
+                        color = colors.onAccentFill,
                     )
                 }
             }

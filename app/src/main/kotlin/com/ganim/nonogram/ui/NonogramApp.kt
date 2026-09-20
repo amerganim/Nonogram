@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,7 +30,6 @@ import androidx.activity.compose.LocalActivity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
@@ -110,35 +110,46 @@ private val destinations = listOf(
 @Composable
 private fun BottomBar(currentRoute: String?, onSelect: (String) -> Unit) {
     val colors = LocalBoardColors.current
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .background(colors.surface)
-            .border(width = 1.dp, color = colors.stroke, shape = RectangleShape)
-            .navigationBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        destinations.forEach { destination ->
-            val selected = currentRoute == destination.route
-            Column(
-                Modifier
-                    .weight(1f)
-                    .height(56.dp)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(if (selected) colors.accent else Color.Transparent)
-                    .clickable(role = Role.Tab) { onSelect(destination.target) },
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                val tint = if (selected) colors.onAccent else colors.textMuted
-                GameIcon(destination.glyph, tint, size = 21.dp)
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    destination.label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = tint,
-                )
+    Column(Modifier.fillMaxWidth().background(colors.surface)) {
+        // A top edge, not a border. A full border draws down both sides and along
+        // the bottom of the gesture area, which reads as a stray outline rather
+        // than a separator.
+        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.stroke))
+        Row(
+            Modifier
+                .navigationBarsPadding()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            destinations.forEach { destination ->
+                val selected = currentRoute == destination.route
+                val shape = RoundedCornerShape(18.dp)
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                        .clip(shape)
+                        .background(if (selected) colors.accentFill else Color.Transparent)
+                        .then(
+                            if (selected) {
+                                Modifier.border(1.dp, colors.accentDeep, shape)
+                            } else {
+                                Modifier
+                            },
+                        )
+                        .clickable(role = Role.Tab) { onSelect(destination.target) },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    val tint = if (selected) colors.onAccentFill else colors.textMuted
+                    GameIcon(destination.glyph, tint, size = 21.dp)
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        destination.label,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = tint,
+                    )
+                }
             }
         }
     }

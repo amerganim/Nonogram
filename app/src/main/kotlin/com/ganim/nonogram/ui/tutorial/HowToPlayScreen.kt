@@ -296,7 +296,12 @@ private fun LessonBoard(
         // --- the focused line ---------------------------------------------------------
         // Highlighted across the clue gutter too, because the point of the highlight is
         // to connect a number to the squares it governs.
-        val glow = colors.accent.copy(alpha = 0.16f)
+        // The theme's own highlight, which is the info colour: the same wash the
+        // play screen puts under the row your finger is on. Gold at low alpha over
+        // the dark ground turns a muddy brown, and it would also mean the
+        // highlight and the filled squares were the same hue - the one pairing a
+        // teaching screen cannot afford.
+        val glow = colors.highlight
         step.focusRows.forEach { row ->
             drawRect(glow, Offset(0f, originY + row * cell), Size(originX + span, cell))
         }

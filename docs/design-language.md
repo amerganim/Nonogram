@@ -16,7 +16,8 @@ before you read it.
 
 | Role | Dark | Light | Means |
 |---|---|---|---|
-| `accent` | gold `#FFC145` | deep amber `#9A5B00` | the thing to press. Nothing else is this colour. |
+| `accent` | gold `#FFC145` | burnt orange `#BF3F08` | the accent as **ink**: text, a meter, a thin line |
+| `accentFill` | gold `#FFC145` | gold `#FFB020` | the accent as a **fill** carrying dark text: a button face, a selected tab |
 | `cellMistake` | coral `#FF6B6B` | `#C2372F` | what costs you something: a wrong square, a spent life, a streak about to break |
 | `success` | mint `#3DDC97` | `#12795A` | confirmed and safe: a solved day, a hint in hand, a free action |
 | `info` | sky `#5AC8FA` | `#0E6E8F` | being explained: a hint, the line the tutorial is working on |
@@ -62,6 +63,24 @@ and it is what most of the "game" impression actually comes from.
 Disabled loses the bevel as well as the colour. A key that still looks pressable and does
 nothing is worse than one that plainly is not.
 
+## Ink and fill are two different colours
+
+On night they are the same gold. On paper they cannot be: a colour dark enough to be
+readable *as text* on cream is too dark to be a cheerful button, and the first port
+shipped exactly that — a muddy brown primary that made the light theme look like a
+different, sadder app.
+
+So `accent` stays dark for text and lines, and `accentFill` stays bright for surfaces you
+put dark text on. A bright fill has almost no contrast against paper (1.7:1), so anything
+wearing it also wears an `accentDeep` edge, which is what gives the control its visible
+boundary.
+
+The solid chip is a separate composable (`AccentChip`) rather than a flag on `Chip`,
+because the first version let the caller choose the fill and the daily screen chose
+`accent` — shipping ink on dark orange at **2.88:1**. The contrast test could not catch
+it: the palette pair it checks was fine, only the call site was wrong. So the call site
+no longer gets to choose.
+
 ## What contrast cost
 
 A saturated palette fails WCAG AA far more easily than a quiet one. The first draft of
@@ -76,6 +95,16 @@ Two values were moved during the port for exactly that reason:
 
 - the dark satisfied-clue grey failed at 4.21:1 on a raised card → lightened to `#9A90DC`
 - the dark major grid line failed at 2.58:1 against an empty cell → lightened to `#9084E0`
+
+Two more were only findable on a device, which is why the port was checked there:
+
+- **The status bar icons were invisible in the light theme.** The system picks their
+  colour from `isAppearanceLightStatusBars`, not from what is behind them, so cream paper
+  got white icons. Set in `NonogramTheme`.
+- **The tutorial's focus band was gold at low alpha**, which over the dark ground is a
+  muddy brown — and meant the highlight and the filled squares shared a hue, on the one
+  screen whose whole job is telling them apart. It now uses the theme's own `highlight`,
+  the same wash the play screen puts under the row your finger is on.
 
 ## Where it lives
 

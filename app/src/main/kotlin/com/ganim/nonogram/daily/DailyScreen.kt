@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ganim.nonogram.puzzle.model.Difficulty
 import com.ganim.nonogram.ui.components.Capsule
+import com.ganim.nonogram.ui.components.AccentChip
 import com.ganim.nonogram.ui.components.Chip
 import com.ganim.nonogram.ui.components.GameIcon
 import com.ganim.nonogram.ui.components.Glyph
@@ -148,7 +149,7 @@ private fun TodayCard(state: DailyUiState, onPlay: () -> Unit) {
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Chip("TODAY", colors.accent, solid = true)
+            AccentChip("TODAY")
             Chip("${state.size} × ${state.size}", colors.info)
             Chip(state.difficulty.name.lowercase(), difficultyTint(state.difficulty))
         }
@@ -258,7 +259,7 @@ private fun MonthView(
                 color = colors.clueText,
             )
             MonthArrow(
-                glyph = Glyph.ARROW,
+                glyph = Glyph.FORWARD,
                 description = "Next month",
                 enabled = state.month < java.time.YearMonth.from(state.today),
                 onClick = onNext,

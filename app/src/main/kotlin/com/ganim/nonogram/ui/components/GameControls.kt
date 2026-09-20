@@ -83,9 +83,9 @@ fun PrimaryButton(
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
 
-    val faceColor = if (enabled) face ?: colors.accent else colors.stroke
+    val faceColor = if (enabled) face ?: colors.accentFill else colors.stroke
     val bevelColor = if (enabled) bevel ?: colors.accentDeep else colors.stroke
-    val labelColor = if (enabled) onFace ?: colors.onAccent else colors.textMuted
+    val labelColor = if (enabled) onFace ?: colors.onAccentFill else colors.textMuted
 
     val drop by animateDpAsState(
         targetValue = if (pressed && enabled) Depth else 0.dp,
@@ -190,32 +190,53 @@ fun Panel(
 /** Compose's own ColumnScope, aliased so callers of [Panel] read naturally. */
 typealias ColumnScopeAlias = androidx.compose.foundation.layout.ColumnScope
 
-/** A small rounded label: a difficulty, a size, a state. */
+/**
+ * A small rounded label: a difficulty, a size, a state.
+ *
+ * Outlined only. The label is [color] and the fill is [color] at a low alpha, so any
+ * palette colour passed here reads correctly against any surface - which is the point,
+ * since callers pass difficulty tints, the collection violet and the info blue.
+ */
 @Composable
-fun Chip(
-    text: String,
-    color: Color,
-    modifier: Modifier = Modifier,
-    solid: Boolean = false,
-) {
+fun Chip(text: String, color: Color, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(50)
+    Box(
+        modifier
+            .height(26.dp)
+            .clip(shape)
+            .background(color.copy(alpha = TINT_FILL))
+            .border(BorderStroke(1.dp, color.copy(alpha = TINT_EDGE)), shape)
+            .padding(horizontal = 11.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, style = MaterialTheme.typography.labelMedium, color = color)
+    }
+}
+
+/**
+ * The solid chip, which is always the accent.
+ *
+ * Deliberately not an option on [Chip]. A solid chip needs a *bright* fill so its dark
+ * label can read, and the first version let a caller pass any colour: the daily screen
+ * passed `accent` - the light theme's dark orange - and shipped ink-on-dark-orange at
+ * 2.88:1. The contrast test could not catch it, because the palette pair it checks
+ * (`onAccentFill` on `accentFill`) was fine; only the call site was wrong. So the call
+ * site no longer gets to choose.
+ */
+@Composable
+fun AccentChip(text: String, modifier: Modifier = Modifier) {
     val colors = LocalBoardColors.current
     val shape = RoundedCornerShape(50)
     Box(
         modifier
             .height(26.dp)
             .clip(shape)
-            .background(if (solid) color else color.copy(alpha = TINT_FILL))
-            .then(
-                if (solid) Modifier else Modifier.border(BorderStroke(1.dp, color.copy(alpha = TINT_EDGE)), shape),
-            )
+            .background(colors.accentFill)
+            .border(BorderStroke(1.dp, colors.accentDeep), shape)
             .padding(horizontal = 11.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text,
-            style = MaterialTheme.typography.labelMedium,
-            color = if (solid) colors.onAccent else color,
-        )
+        Text(text, style = MaterialTheme.typography.labelMedium, color = colors.onAccentFill)
     }
 }
 
@@ -304,7 +325,7 @@ fun Pip(
         if (glyph != null) {
             GameIcon(
                 glyph,
-                if (filled) colors.onAccent else tint,
+                if (filled) colors.onAccentFill else tint,
                 size = diameter * 0.5f,
                 contentDescription = contentDescription,
             )

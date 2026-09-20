@@ -382,12 +382,12 @@ private fun ToolButton(
     val shape = RoundedCornerShape(16.dp)
     val face = when {
         !enabled -> colors.surface
-        active -> colors.accent
+        active -> colors.accentFill
         else -> colors.surface
     }
     val content = when {
         !enabled -> colors.stroke
-        active -> colors.onAccent
+        active -> colors.onAccentFill
         else -> colors.clueText
     }
     Row(
@@ -395,7 +395,10 @@ private fun ToolButton(
             .height(48.dp)
             .clip(shape)
             .background(face)
-            .then(if (active) Modifier else Modifier.border(1.dp, colors.stroke, shape))
+            // The accent edge belongs to a live accent face. A disabled control that
+            // keeps it still looks pressable, which is the thing the bevel rules are
+            // trying to avoid.
+            .border(1.dp, if (active && enabled) colors.accentDeep else colors.stroke, shape)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
@@ -410,7 +413,7 @@ private fun ToolButton(
                     .background(colors.success)
                     .padding(horizontal = 6.dp, vertical = 1.dp),
             ) {
-                Text(badge, style = MaterialTheme.typography.labelMedium, color = colors.onAccent)
+                Text(badge, style = MaterialTheme.typography.labelMedium, color = colors.onAccentFill)
             }
         }
     }
@@ -435,8 +438,11 @@ private fun LivesIndicator(remaining: Int, total: Int) {
         horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         repeat(total) { index ->
+            // Solid for a life you still have, outline for one you spent: at 21dp
+            // an outline alone is easy to miscount at a glance, and a glance is
+            // the only look this gets mid-drag.
             GameIcon(
-                glyph = Glyph.HEART,
+                glyph = if (index < remaining) Glyph.HEART_SOLID else Glyph.HEART,
                 tint = if (index < remaining) colors.cellMistake else colors.stroke,
                 size = 21.dp,
             )

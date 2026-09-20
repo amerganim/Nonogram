@@ -60,9 +60,11 @@ private val RaisedLight = Color(0xFFFFFFFF)
 private val StrokeLight = Color(0xFFEADDC6)
 private val InkLight = Color(0xFF241C52)
 private val InkMutedLight = Color(0xFF5C5570)
-private val AccentLight = Color(0xFF9A5B00)
-private val AccentDeepLight = Color(0xFF6E4100)
+private val AccentLight = Color(0xFFBF3F08)
+private val AccentFillLight = Color(0xFFFFB020)
+private val AccentDeepLight = Color(0xFF8F5300)
 private val OnAccentLight = Color(0xFFFFFFFF)
+private val OnAccentFillLight = Color(0xFF241C52)
 private val SuccessLight = Color(0xFF12795A)
 private val InfoLight = Color(0xFF0E6E8F)
 private val CollectionLight = Color(0xFF6D3BBF)
@@ -84,8 +86,10 @@ private val StrokeDark = Color(0xFF3C3180)
 private val InkDark = Color(0xFFFFF3DC)
 private val InkMutedDark = Color(0xFFADA3DE)
 private val AccentDark = Color(0xFFFFC145)
+private val AccentFillDark = Color(0xFFFFC145)
 private val AccentDeepDark = Color(0xFFC98A16)
 private val OnAccentDark = Color(0xFF140F2E)
+private val OnAccentFillDark = Color(0xFF140F2E)
 private val SuccessDark = Color(0xFF3DDC97)
 private val InfoDark = Color(0xFF5AC8FA)
 private val CollectionDark = Color(0xFFC77DFF)
@@ -121,10 +125,28 @@ data class BoardColors(
     val clueTextSatisfied: Color,
     val clueBackground: Color,
     val highlight: Color,
+    /**
+     * The accent as ink: text, a meter, a thin line.
+     *
+     * Held to 4.5:1 against every background, which on paper forces it darker than the
+     * brand gold - a bright gold word on cream is unreadable.
+     */
     val accent: Color,
-    /** Sits under a pressed-looking button as its bevel. Never used for text. */
+    /**
+     * The accent as a fill you put dark text on: a button face, a selected tab.
+     *
+     * Free to stay bright, because the text sitting on it is dark. On night these are
+     * the same colour; on paper they diverge, which is what keeps the light theme from
+     * turning muddy brown. A bright fill has little contrast with paper, so anything
+     * wearing it also wears an [accentDeep] edge to give the control a visible boundary.
+     */
+    val accentFill: Color,
+    /** Sits under a pressed-looking button as its bevel, and edges every accent fill. */
     val accentDeep: Color,
+    /** Reads on [accent]. */
     val onAccent: Color,
+    /** Reads on [accentFill]. */
+    val onAccentFill: Color,
     /** Confirmed and safe: a solved day, a hint in hand, a free action. */
     val success: Color,
     /** Being explained: a hint, the line the tutorial is working on. */
@@ -153,8 +175,10 @@ val LightBoardColors = BoardColors(
     // may not do.
     highlight = InfoLight.copy(alpha = 0.12f),
     accent = AccentLight,
+    accentFill = AccentFillLight,
     accentDeep = AccentDeepLight,
     onAccent = OnAccentLight,
+    onAccentFill = OnAccentFillLight,
     success = SuccessLight,
     info = InfoLight,
     collection = CollectionLight,
@@ -179,8 +203,10 @@ val DarkBoardColors = BoardColors(
     clueBackground = PaperDark,
     highlight = InfoDark.copy(alpha = 0.16f),
     accent = AccentDark,
+    accentFill = AccentFillDark,
     accentDeep = AccentDeepDark,
     onAccent = OnAccentDark,
+    onAccentFill = OnAccentFillDark,
     success = SuccessDark,
     info = InfoDark,
     collection = CollectionDark,
@@ -244,6 +270,11 @@ internal fun contrastPairs(colors: BoardColors): List<ContrastPair> = listOf(
     ContrastPair("accent on surface", colors.accent, colors.surface, 4.5),
     ContrastPair("accent on raised", colors.accent, colors.raised, 4.5),
     ContrastPair("text on accent", colors.onAccent, colors.accent, 4.5),
+    ContrastPair("text on accent fill", colors.onAccentFill, colors.accentFill, 4.5),
+    // The fill itself may be pale against the page; its edge is what makes the control
+    // findable, so the edge is what carries the 3:1 boundary requirement.
+    ContrastPair("accent fill edge on board", colors.accentDeep, colors.boardBackground, 3.0),
+    ContrastPair("accent fill edge on surface", colors.accentDeep, colors.surface, 3.0),
     ContrastPair("mistake on board", colors.cellMistake, colors.boardBackground, 4.5),
     ContrastPair("mistake on surface", colors.cellMistake, colors.surface, 4.5),
     ContrastPair("success on board", colors.success, colors.boardBackground, 4.5),
