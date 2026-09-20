@@ -21,7 +21,7 @@ Built against `nonogram-app-build-plan.md`. Phases run in order; see **Status** 
 | 8 | Publishing (human-operated) | **Start now, in parallel** — see below |
 | — | Onboarding and picture puzzles | **Built**, verified on device — see below |
 
-**291 tests, 0 failures**, running in about 7 seconds.
+**299 tests, 0 failures**, running in about 7 seconds.
 
 ### Phase 4 acceptance criteria
 
@@ -50,6 +50,30 @@ Animation durations live in `Motion` so reduce-motion applies in one place.
       **476 frames, 1 janky (0.21%), p50 12 ms** over sustained flinging
 - [x] Progress survives app kill — confirmed on device. *App update* is still untested
       in the sense that matters: there is only a v1 schema, so no migration exists yet.
+
+### Beyond the plan — the app now opens on a ladder, not a date
+
+The first real tester could not work out where the game started, and could not work out
+what "daily" meant. Those are the same failure: the home screen opened on a *concept*.
+"Today's puzzle" assumes you already play; "Level 1" assumes nothing.
+
+So **Play** is the home tab: numbered levels, easiest first — twelve 5×5s, then thirty
+10×10 easy, then medium, hard, expert. 116 levels, with forty-two before the ramp leaves
+the easy end. The first thing on the screen is one bevelled button that says *Start
+here*, and the ladder below it is for people who want to choose instead.
+
+**Nothing is locked.** The plan's "nothing is paywalled or locked" holds, and it is the
+better design anyway: a beginner stuck on level 9 can go elsewhere rather than being
+trapped, and someone who has played nonograms before is not made to grind twelve 5×5s.
+Ordering is guidance, not a gate.
+
+Daily is now the second tab, and says in one sentence what it is — shown until you have
+a streak, then it stops appearing.
+
+Levels come off the front of each pool and pack order is deterministic, so level 7 is the
+same puzzle on every device. `LevelLadderTest` checks that, plus the things that would
+confuse a new player: a ramp that goes backwards, a level number that skips, a "next"
+that points at something already solved.
 
 ### Beyond the plan — the visual direction changed
 
@@ -259,6 +283,7 @@ app/src/main/kotlin/com/ganim/nonogram/
 │   ├── tutorial/    # The scripted solve the How to play screen animates
 │   └── tools/       # Offline generation entry point
 ├── daily/           # DailySchedule, DailySelector, StreakCalculator, calendar screen
+├── progression/     # LevelLadder and the Play home screen
 ├── archive/         # Browser over all 5,000 puzzles
 ├── data/
 │   ├── assets/      # PuzzlePackLoader - reads puzzles.bin

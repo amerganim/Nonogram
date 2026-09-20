@@ -48,6 +48,8 @@ import com.ganim.nonogram.data.repo.Settings
 import com.ganim.nonogram.game.GameScreen
 import com.ganim.nonogram.game.GameViewModel
 import com.ganim.nonogram.monetize.AdTrigger
+import com.ganim.nonogram.progression.PlayScreen
+import com.ganim.nonogram.progression.PlayViewModel
 import com.ganim.nonogram.monetize.RewardPolicy
 import com.ganim.nonogram.ui.components.GameIcon
 import com.ganim.nonogram.ui.components.Glyph
@@ -59,6 +61,7 @@ import java.time.LocalDate
 
 /** The three top-level destinations from build plan 6.1, plus the play screen. */
 private object Routes {
+    const val PLAY = "play"
     const val DAILY = "daily"
     const val ARCHIVE = "archive?pictures={pictures}"
 
@@ -94,6 +97,7 @@ private data class Destination(
 )
 
 private val destinations = listOf(
+    Destination(Routes.PLAY, Routes.PLAY, "Play", Glyph.STAIRS),
     Destination(Routes.DAILY, Routes.DAILY, "Daily", Glyph.CALENDAR),
     Destination(Routes.ARCHIVE, Routes.archive(), "Archive", Glyph.GRID),
     Destination(Routes.SETTINGS, Routes.SETTINGS, "Settings", Glyph.SLIDERS),
@@ -205,9 +209,22 @@ fun NonogramApp(container: AppContainer) {
         ) { padding ->
             NavHost(
                 navController = navController,
-                startDestination = Routes.DAILY,
+                startDestination = Routes.PLAY,
                 modifier = Modifier.fillMaxSize().padding(padding),
             ) {
+                composable(Routes.PLAY) {
+                    val model: PlayViewModel = viewModel(
+                        factory = PlayViewModel.Factory(container.puzzles, container.progress),
+                    )
+                    PlayScreen(
+                        viewModel = model,
+                        // A ladder level is not a daily, so it records no date -
+                        // finishing level 9 must not move the streak.
+                        onPlay = { puzzleId -> navController.navigate(Routes.game(puzzleId, null)) },
+                        onHowToPlay = { navController.navigate(Routes.HOW_TO_PLAY) },
+                    )
+                }
+
                 composable(Routes.DAILY) {
                     val model: DailyViewModel = viewModel(
                         factory = DailyViewModel.Factory(
@@ -340,7 +357,7 @@ private class GameLoad(val state: com.ganim.nonogram.game.GameState?)
 
 private fun navigateTop(navController: NavHostController, route: String) {
     navController.navigate(route) {
-        popUpTo(Routes.DAILY) { saveState = true }
+        popUpTo(Routes.PLAY) { saveState = true }
         launchSingleTop = true
         restoreState = true
     }

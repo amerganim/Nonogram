@@ -74,6 +74,12 @@ fun DailyScreen(
     ) {
         Header(state)
 
+        // Shown until the habit exists. The first tester could not work out what
+        // "daily" meant, and no wonder: the screen showed a date, a grid size and a
+        // streak counter, all of which assume you already know the deal. One sentence
+        // is cheaper than a tutorial, and it stops appearing once it is redundant.
+        if (state.currentStreak == 0 && state.totalCompleted == 0) DailyExplainer()
+
         TodayCard(
             state = state,
             onPlay = { state.puzzleId?.let { onPlay(it, state.today) } },
@@ -102,6 +108,33 @@ fun DailyScreen(
                 }
             },
         )
+    }
+}
+
+/** What the daily puzzle actually is, for somebody seeing the word for the first time. */
+@Composable
+private fun DailyExplainer() {
+    val colors = LocalBoardColors.current
+    Panel(Modifier.fillMaxWidth(), tint = colors.info) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            GameIcon(Glyph.CALENDAR, colors.info, size = 22.dp)
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "One puzzle a day, the same for everyone",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = colors.clueText,
+                )
+                Text(
+                    "Solve it and your streak goes up. Miss a day and it resets. " +
+                        "Everything else in the app stays open either way.",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = colors.textMuted,
+                )
+            }
+        }
     }
 }
 
