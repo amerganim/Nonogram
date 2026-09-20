@@ -33,6 +33,9 @@ data class Puzzle(
 
     val cellCount: Int get() = width * height
 
+    /** Cells the finished picture fills. Cached: the completion check reads it often. */
+    val targetFilledCount: Int by lazy(LazyThreadSafetyMode.PUBLICATION) { solution.count { it } }
+
     fun isFilled(row: Int, col: Int): Boolean = solution[row * width + col]
 
     /** The packed form used by the puzzle pack and by in-progress board snapshots. */

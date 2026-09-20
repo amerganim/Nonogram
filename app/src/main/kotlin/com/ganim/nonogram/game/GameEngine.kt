@@ -63,7 +63,7 @@ object GameEngine {
         from: CellState,
         to: CellState,
     ): GameState {
-        val board = state.board.toMutableList().also { it[index] = to }
+        val board = state.board.with(index, to)
         val gesture = state.openGesture?.let { UndoEntry(it.changes + CellChange(index, from, to)) }
         return state
             .copy(board = board, openGesture = gesture)
@@ -72,7 +72,7 @@ object GameEngine {
 
     private fun applyMistake(state: GameState, index: Int): GameState {
         val lives = state.livesRemaining - 1
-        val board = state.board.toMutableList().also { it[index] = CellState.CROSSED }
+        val board = state.board.with(index, CellState.CROSSED)
         return state.copy(
             board = board,
             mistakeCells = state.mistakeCells + index,
@@ -156,9 +156,11 @@ object GameEngine {
      */
     fun undo(state: GameState): GameState {
         val entry = state.undoStack.lastOrNull() ?: return state
-        val board = state.board.toMutableList()
-        // Reverse order, so a gesture that touched the same cell twice unwinds correctly.
-        entry.changes.asReversed().forEach { change -> board[change.index] = change.from }
+        // One copy for the whole gesture, unwound in reverse so a gesture that touched
+        // the same cell twice ends up back where it started.
+        val board = state.board.mutate {
+            entry.changes.asReversed().forEach { change -> this[change.index] = change.from }
+        }
         return state.copy(
             board = board,
             undoStack = state.undoStack.dropLast(1),
@@ -200,7 +202,7 @@ object GameEngine {
         val current = state.board[index]
         if (current == truth) return state
 
-        val board = state.board.toMutableList().also { it[index] = truth }
+        val board = state.board.with(index, truth)
         return state
             .copy(
                 board = board,
@@ -223,9 +225,11 @@ object GameEngine {
      */
     private fun GameState.withCompletionChecked(): GameState {
         if (status == GameStatus.OUT_OF_LIVES) return this
-        val solved = board.indices.all { i ->
-            (board[i] == CellState.FILLED) == puzzle.solution[i]
-        }
+        // Every filled cell is necessarily correct - a wrong fill becomes a mistake and
+        // is written as a cross instead - so the board is finished exactly when the right
+        // number of cells are filled. That turns an O(cells) scan on every painted cell
+        // into a single comparison.
+        val solved = filledCount == puzzle.targetFilledCount
         val next = if (solved) GameStatus.COMPLETE else GameStatus.PLAYING
         return if (next == status) this else copy(status = next)
     }

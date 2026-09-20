@@ -39,7 +39,7 @@ data class UndoEntry(val changes: List<CellChange>) {
  */
 data class GameState(
     val puzzle: Puzzle,
-    val board: List<CellState>,
+    val board: Board,
     /** Cells the player filled wrongly. Permanently revealed, and never repainted. */
     val mistakeCells: Set<Int>,
     val livesRemaining: Int,
@@ -76,10 +76,16 @@ data class GameState(
     /** True when [index] holds a filled cell in the real solution. */
     fun solutionFilled(index: Int): Boolean = puzzle.solution[index]
 
-    /** Filled cells placed so far, out of the total the solution needs. */
-    val filledCount: Int get() = board.count { it == CellState.FILLED }
+    /**
+     * Filled cells placed so far, out of the total the solution needs.
+     *
+     * Carried rather than counted. The completion check runs on every painted cell, and
+     * scanning the whole board each time is the one genuinely per-cell cost in the
+     * engine's hot path.
+     */
+    val filledCount: Int get() = board.countOf(CellState.FILLED)
 
-    val targetFilledCount: Int get() = puzzle.solution.count { it }
+    val targetFilledCount: Int get() = puzzle.targetFilledCount
 
     val progress: Float
         get() = if (targetFilledCount == 0) 1f else filledCount.toFloat() / targetFilledCount
@@ -93,7 +99,7 @@ data class GameState(
 
         fun newGame(puzzle: Puzzle): GameState = GameState(
             puzzle = puzzle,
-            board = List(puzzle.cellCount) { CellState.UNKNOWN },
+            board = Board.blank(puzzle.cellCount),
             mistakeCells = emptySet(),
             livesRemaining = MAX_LIVES,
             hintsUsed = 0,

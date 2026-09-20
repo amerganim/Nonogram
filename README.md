@@ -50,26 +50,41 @@ Animation durations live in `Motion` so reduce-motion applies in one place.
 - [x] Progress survives app kill — confirmed on device. *App update* is still untested
       in the sense that matters: there is only a v1 schema, so no migration exists yet.
 
-### Known performance gap
+### Board rendering performance
 
-**20×20 drag painting does not hold 60fps.** Measured on the Galaxy A15: p50 16 ms,
-p90 24 ms, 47% of frames past deadline.
+Measured on a Galaxy A15 (Helio G99, 1080x2340). The display runs at **90 Hz**, so
+Android's own jank counter is judging against a 12.1 ms deadline, not the 16.7 ms the
+plan's "60fps" criterion implies.
 
-The useful finding is *where the cost is not*. A 10×10 board costs the same per update as
-a 20×20 — the work is not proportional to the number of cells, so it was never the
-drawing. Four rounds of draw-side optimisation (culling blank cells, recording the clue
-numbers into a replayable `Picture`, batching cross marks) cut measured draw stalls from
-108 frames to 15 but barely moved the headline number.
+| Change | p50 | p90 | Slow-draw frames |
+|---|---|---|---|
+| Starting point | 18 ms | 21 ms | 108 |
+| Cull blank cells, record clue text into a `Picture` | 18 ms | 24 ms | 15 |
+| Read board state in the draw phase, not composition | 16 ms | 24 ms | 56 |
+| Byte-backed board, O(1) completion, no offscreen layers | **15 ms** | 23 ms | **7** |
 
-What remains is per-update cost on the UI thread. Moving the board read out of
-composition and into the draw phase took p50 from 18 ms to 16 ms, which confirms the
-diagnosis without closing the gap. The likely remainder is `GameState` copying its whole
-board list on every painted cell; fixing that means changing the board representation
-from `List<CellState>` to a snapshot-backed array, which touches `GameEngine` and its
-tests. That is the next thing to try, and it should be done before Phase 6 hardening.
+Drawing is now essentially free - 7 slow-draw frames out of 138, down from 108.
 
-One caveat on the measurement: these numbers come from `adb input swipe`, which injects
-events in bursts. Real finger input may behave differently, better or worse.
+**The decisive measurement:** dragging over cells that are already crossed, so *no board
+state changes at all* and only the highlight moves, still costs **p50 13 ms**. That is
+the floor for redrawing a full-screen Compose `Canvas` on this device. All of the game
+logic - the board copy, the completion check, the clue-progress scan - accounts for
+about 2 ms of the 15.
+
+So: **roughly 66fps median during a drag.** That meets the plan's 60fps at the median
+and misses it at p90 (23 ms). It cannot meet the device's own 90 Hz target, because an
+empty redraw already exceeds that deadline.
+
+Two things worth knowing before anyone optimises further:
+
+- The remaining cost is Compose's full-surface redraw, not this code. Shaving the game
+  logic further will not move it; the next real lever would be redrawing less of the
+  screen, and the board already fills most of it.
+- These numbers come from `adb input swipe`, which injects events far more slowly than a
+  real finger (~15/sec against 120+). Each injected event produces exactly one frame, so
+  the frame *count* here says nothing about real smoothness - only the per-frame cost
+  does. Re-measure with a real finger and `dumpsys gfxinfo framestats` before drawing
+  conclusions.
 
 ### Phase 5 acceptance criteria
 
@@ -87,8 +102,9 @@ events in bursts. Real finger input may behave differently, better or worse.
 Verified on a physical Galaxy A15 (SM-A155M, Android 16, 90 Hz display).
 
 - [x] All four grid sizes render and are playable — confirmed on device
-- [ ] **Sustained 60fps dragging on 20×20 — NOT MET.** Measured p50 16 ms, p90 24 ms,
-      47% of frames missing the device's 11.1 ms deadline. See "Known performance gap".
+- [~] **Sustained 60fps dragging on 20×20 — met at the median, not at p90.** p50 15 ms
+      (~66fps), p90 23 ms. See "Board rendering performance" for why the remaining cost
+      is not in this code.
 - [x] Drag-paint mode-locking and axis-snapping — confirmed on device: a sweep with
       deliberate vertical wobble painted one row only
 - [x] Kill mid-puzzle and relaunch restores board, timer, lives and undo — confirmed by

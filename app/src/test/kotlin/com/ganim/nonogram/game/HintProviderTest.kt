@@ -119,7 +119,9 @@ class HintProviderTest {
     fun `a board with nothing left undecided offers no hint`() {
         val puzzle = Puzzle.fromRenderedRows(listOf("#.#", ".#.", "#.#"))
         val decided = GameState.newGame(puzzle).copy(
-            board = puzzle.solution.map { if (it) CellState.FILLED else CellState.CROSSED },
+            board = Board.of(puzzle.cellCount) { i ->
+                if (puzzle.solution[i]) CellState.FILLED else CellState.CROSSED
+            },
         )
         hints.nextHint(decided) shouldBe null
     }

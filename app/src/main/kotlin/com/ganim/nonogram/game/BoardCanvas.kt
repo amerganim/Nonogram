@@ -79,7 +79,7 @@ fun BoardCanvas(
  * value, so a drag that changes no clue's state redraws without re-recording anything.
  */
 internal class BoardRenderCache(private val colors: BoardColors) {
-    private var cachedBoard: List<CellState>? = null
+    private var cachedBoard: Board? = null
     private var cachedProgress: BoardClueProgress? = null
 
     private var cachedCellSize = 0f
@@ -302,6 +302,7 @@ private fun DrawScope.drawClues(
 ) {
     val background = colors.clueBackground.copy(alpha = alpha)
     val alpha255 = (alpha * 255).toInt().coerceIn(0, 255)
+    val opaque = alpha >= 0.999f
 
     // Row clues, down the left edge of the board.
     drawRect(
@@ -322,13 +323,21 @@ private fun DrawScope.drawClues(
         }
         drawIntoCanvas { canvas ->
             val native = canvas.nativeCanvas
-            val checkpoint = native.saveLayerAlpha(
-                metrics.gutterLeft,
-                metrics.gutterBottom,
-                metrics.gutterRight,
-                size.height,
-                alpha255,
-            )
+            // saveLayerAlpha allocates an offscreen buffer and composites it back. That
+            // is a fixed cost per frame regardless of board size, and it is only needed
+            // while the gutters are fading out on completion. The rest of the time -
+            // which is all of the time the player is actually dragging - it is skipped.
+            val checkpoint = if (opaque) {
+                native.save()
+            } else {
+                native.saveLayerAlpha(
+                    metrics.gutterLeft,
+                    metrics.gutterBottom,
+                    metrics.gutterRight,
+                    size.height,
+                    alpha255,
+                )
+            }
             native.translate(metrics.gutterLeft, metrics.gridTop)
             native.drawPicture(pictures.rows)
             native.restoreToCount(checkpoint)
@@ -351,13 +360,17 @@ private fun DrawScope.drawClues(
         }
         drawIntoCanvas { canvas ->
             val native = canvas.nativeCanvas
-            val checkpoint = native.saveLayerAlpha(
-                metrics.gutterRight,
-                metrics.gutterTop,
-                size.width,
-                metrics.gutterBottom,
-                alpha255,
-            )
+            val checkpoint = if (opaque) {
+                native.save()
+            } else {
+                native.saveLayerAlpha(
+                    metrics.gutterRight,
+                    metrics.gutterTop,
+                    size.width,
+                    metrics.gutterBottom,
+                    alpha255,
+                )
+            }
             native.translate(metrics.gridLeft, metrics.gutterTop)
             native.drawPicture(pictures.columns)
             native.restoreToCount(checkpoint)

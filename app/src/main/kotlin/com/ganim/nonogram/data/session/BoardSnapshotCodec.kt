@@ -1,5 +1,6 @@
 package com.ganim.nonogram.data.session
 
+import com.ganim.nonogram.game.Board
 import com.ganim.nonogram.game.CellChange
 import com.ganim.nonogram.game.GameState
 import com.ganim.nonogram.game.GameStatus
@@ -116,7 +117,7 @@ object BoardSnapshotCodec {
         val crossed = input.readBitset(n)
         val mistakes = input.readBitset(n)
 
-        val board = List(n) { i ->
+        val board = Board.of(n) { i ->
             when {
                 filled[i] -> CellState.FILLED
                 crossed[i] -> CellState.CROSSED
