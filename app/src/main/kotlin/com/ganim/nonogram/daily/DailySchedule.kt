@@ -23,6 +23,15 @@ data class DailySpec(val size: Int, val difficulty: Difficulty)
  */
 object DailySchedule {
 
+    /**
+     * Any Monday; only used to turn a bare weekday into a date the rotation can read.
+     *
+     * Declared first on purpose. Kotlin runs an object's property initialisers in
+     * declaration order, so anything below that reaches this must come after it, or it
+     * reads null and the class fails to initialise.
+     */
+    private val MONDAY_REFERENCE: LocalDate = LocalDate.of(2024, 1, 1)
+
     fun specFor(date: LocalDate): DailySpec = when (date.dayOfWeek) {
         DayOfWeek.MONDAY, DayOfWeek.TUESDAY -> DailySpec(10, Difficulty.EASY)
         DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY -> DailySpec(15, Difficulty.MEDIUM)
@@ -33,6 +42,20 @@ object DailySchedule {
 
     /** Every spec the rotation can produce, so the pack can be checked for coverage. */
     val allSpecs: Set<DailySpec> = DayOfWeek.entries
-        .map { day -> specFor(LocalDate.of(2024, 1, 1).with(day)) }
+        .map(::specForWeekday)
         .toSet()
+
+    fun specForWeekday(day: DayOfWeek): DailySpec = specFor(MONDAY_REFERENCE.with(day))
+
+    /**
+     * The weekdays that draw from the same pool as [day], in week order.
+     *
+     * Monday and Tuesday share the easy 10x10 pool, so their draws have to be counted
+     * together - otherwise two slots would walk the same pool independently and collide
+     * with each other, which is the whole thing [DailySelector] exists to prevent.
+     */
+    fun weekdaysSharing(day: DayOfWeek): List<DayOfWeek> {
+        val spec = specForWeekday(day)
+        return DayOfWeek.entries.filter { specForWeekday(it) == spec }
+    }
 }

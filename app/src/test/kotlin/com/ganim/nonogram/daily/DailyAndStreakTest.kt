@@ -38,9 +38,6 @@ class DailyAndStreakTest {
 
         @Test
         fun `the hash is pinned, so past dailies never change`() {
-            // These are the values the shipped selector produces. If this test fails
-            // after a change to DailySelector, every past daily and every stored
-            // DailyRecord now points at a different puzzle.
             DailySelector.dateKey(LocalDate.of(2026, 1, 1)) shouldBe "2026-01-01"
             assertEquals(DailySelector.hash("2026-01-01"), DailySelector.hash("2026-01-01"))
 
@@ -50,13 +47,77 @@ class DailyAndStreakTest {
         }
 
         @Test
-        fun `consecutive days do not clump together`() {
-            // FNV-1a over dates that differ by one character still has to scatter, or
-            // the whole week would be drawn from a handful of neighbouring puzzles.
-            val start = LocalDate.of(2026, 5, 1)
-            val indices = (0 until 30).map { DailySelector.indexInPool(start.plusDays(it.toLong()), 900) }
-            assertTrue(indices.toSet().size >= 25) {
-                "30 consecutive days produced only ${indices.toSet().size} distinct puzzles"
+        @DisplayName("a slot uses every puzzle in its pool before repeating any of them")
+        fun `a full cycle has no repeats`() {
+            val poolSize = 53
+            // Monday and Tuesday share a pool, so walk both. A scheme that numbered each
+            // weekday separately would have the two slots collide with each other, which
+            // is exactly the case this pins down.
+            val start = LocalDate.of(2026, 1, 5) // a Monday
+            val dates = generateSequence(start) { it.plusDays(1) }
+                .filter { it.dayOfWeek == DayOfWeek.MONDAY || it.dayOfWeek == DayOfWeek.TUESDAY }
+                .take(poolSize)
+                .toList()
+
+            val indices = dates.map { DailySelector.indexInPool(it, poolSize) }
+            assertEquals(
+                (0 until poolSize).toSet(), indices.toSet(),
+                "a full cycle should be a permutation of the whole pool",
+            )
+        }
+
+        @Test
+        @DisplayName("no repeat in any window of poolSize draws, including across a lap boundary")
+        fun `windows spanning a lap boundary have no repeats`() {
+            // The boundary is where a per-lap reseed would break: the end of one lap and
+            // the start of the next come from unrelated permutations and can collide.
+            val poolSize = 11
+            val start = LocalDate.of(2026, 1, 2) // a Friday, which has a pool to itself
+            val fridays = generateSequence(start) { it.plusWeeks(1) }.take(poolSize * 3).toList()
+            val indices = fridays.map { DailySelector.indexInPool(it, poolSize) }
+
+            indices.windowed(poolSize).forEachIndexed { at, window ->
+                assertEquals(
+                    poolSize, window.toSet().size,
+                    "window starting at draw $at repeated a puzzle: $window",
+                )
+            }
+        }
+
+        @Test
+        fun `the order is periodic, so a lap is a full pass through the pool`() {
+            val poolSize = 11
+            val start = LocalDate.of(2026, 1, 2)
+            val fridays = generateSequence(start) { it.plusWeeks(1) }.take(poolSize * 2).toList()
+            val first = fridays.take(poolSize).map { DailySelector.indexInPool(it, poolSize) }
+            val second = fridays.drop(poolSize).map { DailySelector.indexInPool(it, poolSize) }
+            first shouldBe second
+        }
+
+        @Test
+        fun `occurrence numbering is contiguous across a shared pool`() {
+            // Mon, Tue, Mon, Tue... must number consecutively, with no gaps or reuse.
+            val start = LocalDate.of(2026, 1, 5) // a Monday
+            val dates = generateSequence(start) { it.plusDays(1) }
+                .filter { it.dayOfWeek == DayOfWeek.MONDAY || it.dayOfWeek == DayOfWeek.TUESDAY }
+                .take(20)
+                .toList()
+            val first = DailySelector.occurrenceIndex(start)
+            dates.map(DailySelector::occurrenceIndex) shouldBe (first until first + 20).toList()
+        }
+
+        @Test
+        fun `dates before the epoch stay distinct and correctly ordered`() {
+            val mondays = generateSequence(DailySelector.EPOCH.minusWeeks(30)) { it.plusWeeks(1) }
+                .take(20)
+                .toList()
+            val sequence = mondays.map(DailySelector::occurrenceIndex)
+            assertEquals(sequence.size, sequence.toSet().size, "pre-epoch dates collided")
+            assertTrue(sequence.zipWithNext().all { (a, b) -> a < b }) {
+                "pre-epoch ordering is wrong: $sequence"
+            }
+            mondays.forEach { date ->
+                assertTrue(DailySelector.indexInPool(date, 37) in 0 until 37)
             }
         }
 

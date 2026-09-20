@@ -130,7 +130,7 @@ Compose.
 
 ## Decisions that differ from the build plan
 
-Both are documented in full where they live; summarised here so they are not a surprise.
+All three are documented in full where they live; summarised here so they are not a surprise.
 
 **1. Difficulty is rated on a composite score, not `solveDepth` alone.**
 The plan's table (`EXPERT = 20×20 at depth 11+`) cannot be implemented: measured over
@@ -139,7 +139,17 @@ grow with grid size. `DifficultyRater.hardness` keeps depth dominant and adds tw
 measured signals to break up the clumps. The plan invites exactly this ("tune these
 thresholds empirically during Phase 1"). Numbers in `docs/phase1-calibration.md`.
 
-**2. Bands are relative within a grid size.** A 20×20 `HARD` means "the easier 43% of
+**2. The daily selector walks each pool instead of sampling it.**
+The plan's `hash(dateString) % poolSize` (§6.2) has no memory, so every day is an
+independent draw and the birthday paradox applies — measured against the real pack it
+handed back an already-solved puzzle **14 times a year**. The requirement behind the
+formula is "deterministic, no server, no per-device drift", and that is kept in full:
+`DailySelector` counts how many times a weekday slot has come round since a fixed epoch
+and steps through a fixed permutation of that slot's pool. No puzzle repeats within any
+`poolSize` consecutive draws; the soonest repeat is **7.2 years** out. Still a pure
+function of the date.
+
+**3. Bands are relative within a grid size.** A 20×20 `HARD` means "the easier 43% of
 20×20 puzzles", not a difficulty comparable to a 15×15 `HARD`. The depth distributions
 for different sizes overlap almost completely, so no cross-size absolute scale exists.
 
@@ -152,17 +162,6 @@ the plan's `com.<yourdomain>.nonogram`. It is a find-and-replace away right now 
 **permanently fixed the moment the app is first uploaded to Play**. Change it before
 Phase 8 if you want something else.
 
-**The daily puzzle repeats about 14 times a year.** This is inherent to the plan's
-`hash(dateString) % poolSize` (§6.2): each day is an independent draw with no memory, so
-the birthday paradox applies — 104 Mondays and Tuesdays drawing from 900 easy 10×10
-puzzles will collide on their own. Measured over 2026: 14 repeats, slightly better than
-the ~19 chance would predict, so the hash is fine. The *formula* is the limit.
-
-It is fixable without a server and without storing anything: number each spec's
-occurrences since an epoch date, then walk a deterministic permutation of the pool so
-every puzzle appears once before any repeats. That pushes the first repeat out to about
-8.6 years. Left alone for now because §6.2 specifies the formula explicitly — say the
-word and it is a small change.
 
 ---
 

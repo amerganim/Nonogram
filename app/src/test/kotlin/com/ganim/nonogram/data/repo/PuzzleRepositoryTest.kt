@@ -74,7 +74,7 @@ class PuzzleRepositoryTest {
     }
 
     @Test
-    @DisplayName("a year of dailies is deterministic and rarely repeats")
+    @DisplayName("a year of dailies is deterministic and never repeats")
     fun `daily selection over a year`() {
         assumeTrue(packBytes != null)
         val summaries = PuzzlePack.summaries(packBytes!!)
@@ -91,18 +91,30 @@ class PuzzleRepositoryTest {
         // Deterministic: computing twice gives the same answer.
         year.forEach { date -> dailyIdFor(date) shouldBe dailyIdFor(date) }
 
-        // Some repeats are unavoidable. `hash(date) % poolSize` has no memory, so each
-        // day is an independent draw and the birthday paradox applies: 104 Mondays and
-        // Tuesdays drawing from 900 easy 10x10 puzzles collide about six times a year on
-        // their own, and summed across the week the expectation is ~19 repeats per year.
+        // No repeats at all. Each rotation slot walks a permutation of its own pool, so
+        // it uses every puzzle before reusing any. The smallest pool is 600 and no slot
+        // comes round more than 104 times a year, so a year cannot wrap a cycle.
         //
-        // This asserts the hash is not doing anything *worse* than chance. Measured, it
-        // does slightly better - 14 repeats across 2026. A hash that clumped would show
-        // up here as far fewer distinct puzzles.
+        // The plan's literal `hash(date) % poolSize` gave 14 repeats here.
         val distinct = year.map(::dailyIdFor).toSet().size
-        assertTrue(distinct >= 335) {
-            "only $distinct distinct puzzles across 365 days, worse than chance would give"
+        assertEquals(365, distinct, "a year of dailies repeated ${365 - distinct} puzzles")
+    }
+
+    @Test
+    @DisplayName("five years of dailies still repeat nothing")
+    fun `five years without a repeat`() {
+        assumeTrue(packBytes != null)
+        val summaries = PuzzlePack.summaries(packBytes!!)
+
+        fun dailyIdFor(date: LocalDate): String {
+            val spec = DailySchedule.specFor(date)
+            val pool = summaries.filter { it.width == spec.size && it.difficulty == spec.difficulty }
+            return pool[com.ganim.nonogram.daily.DailySelector.indexInPool(date, pool.size)].id
         }
+
+        val start = LocalDate.of(2026, 1, 1)
+        val ids = (0 until 365 * 5).map { dailyIdFor(start.plusDays(it.toLong())) }
+        assertEquals(ids.size, ids.toSet().size, "${ids.size - ids.toSet().size} repeats over five years")
     }
 
     @Test
