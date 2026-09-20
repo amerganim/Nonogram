@@ -169,7 +169,7 @@ tasks.register<JavaExec>("generatePuzzlePack") {
 
     jvmArgs("-Xmx2g")
     // Tuning flags, e.g. ./gradlew generatePuzzlePack -Pcount=5000 -Pseed=7
-    listOf("count", "seed", "out", "threads", "calibrate", "sample").forEach { key ->
+    listOf("count", "seed", "out", "threads", "calibrate", "sample", "pictures").forEach { key ->
         (project.findProperty(key) as String?)?.let { args("--$key=$it") }
     }
 }

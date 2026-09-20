@@ -33,15 +33,21 @@ import com.ganim.nonogram.puzzle.model.Puzzle
  *   height      u8
  *   difficulty  u8   (explicit code, see difficultyCode - deliberately not the enum ordinal)
  *   solveDepth  u8
+ *   nameLength  u8   (v2; zero for the generated puzzles, which have no name)
+ *   name        nameLength bytes, UTF-8
  *   bitset      ceil(width * height / 8) bytes, cell i at byte i/8 bit i%8, LSB first
  * ```
+ *
+ * Version 2 added the name, for the hand-drawn picture puzzles. Generated puzzles carry
+ * an empty name and cost one extra byte each - about 5 KB across the whole pack, which
+ * is a fair price for not needing a second format.
  * Integers are big-endian. Records appear in the order given to [encode], and the daily
  * puzzle selector depends on that order being stable across regenerations.
  */
 object PuzzlePack {
 
     const val MAGIC = "NNPK"
-    const val VERSION = 1
+    const val VERSION = 2
 
     private const val HEADER_BYTES = 12
     private const val INDEX_ENTRY_BYTES = 4
@@ -61,7 +67,13 @@ object PuzzlePack {
             }
         }
 
-        val recordSizes = puzzles.map { RECORD_HEADER_BYTES + (it.cellCount + 7) / 8 }
+        val nameBytes = puzzles.map { it.name.toByteArray(Charsets.UTF_8) }
+        nameBytes.forEachIndexed { i, bytes ->
+            require(bytes.size <= 255) { "Puzzle ${puzzles[i].id} has a name longer than 255 bytes" }
+        }
+        val recordSizes = puzzles.mapIndexed { i, puzzle ->
+            RECORD_HEADER_BYTES + 1 + nameBytes[i].size + (puzzle.cellCount + 7) / 8
+        }
         val indexBytes = puzzles.size * INDEX_ENTRY_BYTES
         val total = HEADER_BYTES + indexBytes + recordSizes.sum()
         val out = ByteArray(total)
@@ -78,11 +90,14 @@ object PuzzlePack {
             recordAt += size
         }
 
-        for (puzzle in puzzles) {
+        puzzles.forEachIndexed { i, puzzle ->
             out[at++] = puzzle.width.toByte()
             out[at++] = puzzle.height.toByte()
             out[at++] = difficultyCode(puzzle.difficulty).toByte()
             out[at++] = puzzle.solveDepth.toByte()
+            out[at++] = nameBytes[i].size.toByte()
+            nameBytes[i].copyInto(out, at)
+            at += nameBytes[i].size
             val bits = puzzle.bitset()
             bits.copyInto(out, at)
             at += bits.size
@@ -124,15 +139,23 @@ object PuzzlePack {
         val height = bytes[offset + 1].toInt() and 0xFF
         val difficulty = difficultyFor(bytes[offset + 2].toInt() and 0xFF)
         val solveDepth = bytes[offset + 3].toInt() and 0xFF
-        val cells = Grid.fromBitset(bytes, width * height, offset + RECORD_HEADER_BYTES)
+        val nameLength = bytes[offset + 4].toInt() and 0xFF
+        val name = if (nameLength == 0) {
+            ""
+        } else {
+            String(bytes, offset + RECORD_HEADER_BYTES + 1, nameLength, Charsets.UTF_8)
+        }
+        val cells = Grid.fromBitset(bytes, width * height, offset + RECORD_HEADER_BYTES + 1 + nameLength)
         // Clues and id are derived here rather than stored, per plan 4.4.
-        return Puzzle.fromSolution(width, height, cells, difficulty, solveDepth)
+        return Puzzle.fromSolution(width, height, cells, difficulty, solveDepth, name)
     }
 
     /** A puzzle's shape and rating, without its grid or clues. */
     data class Summary(
         val index: Int,
         val id: String,
+        /** The picture's name, or empty for a generated puzzle. */
+        val name: String,
         val width: Int,
         val height: Int,
         val difficulty: Difficulty,
@@ -153,12 +176,17 @@ object PuzzlePack {
             val offset = readU32(bytes, HEADER_BYTES + i * INDEX_ENTRY_BYTES)
             val width = bytes[offset].toInt() and 0xFF
             val height = bytes[offset + 1].toInt() and 0xFF
+            val nameLength = bytes[offset + 4].toInt() and 0xFF
+            val bitsetAt = offset + RECORD_HEADER_BYTES + 1 + nameLength
             val bitsetLength = (width * height + 7) / 8
             Summary(
                 index = i,
-                id = Puzzle.stableIdFromBitset(
-                    width, height, bytes, offset + RECORD_HEADER_BYTES, bitsetLength,
-                ),
+                id = Puzzle.stableIdFromBitset(width, height, bytes, bitsetAt, bitsetLength),
+                name = if (nameLength == 0) {
+                    ""
+                } else {
+                    String(bytes, offset + RECORD_HEADER_BYTES + 1, nameLength, Charsets.UTF_8)
+                },
                 width = width,
                 height = height,
                 difficulty = difficultyFor(bytes[offset + 2].toInt() and 0xFF),
@@ -170,7 +198,10 @@ object PuzzlePack {
     /** Byte size [encode] would produce, for checking against the plan's 1 MB ceiling. */
     fun estimatedSize(puzzles: List<Puzzle>): Int =
         HEADER_BYTES + puzzles.size * INDEX_ENTRY_BYTES +
-            puzzles.sumOf { RECORD_HEADER_BYTES + (it.cellCount + 7) / 8 }
+            puzzles.sumOf {
+                RECORD_HEADER_BYTES + 1 + it.name.toByteArray(Charsets.UTF_8).size +
+                    (it.cellCount + 7) / 8
+            }
 
     /**
      * Explicit on-disk codes. Not [Enum.ordinal]: reordering the enum would silently

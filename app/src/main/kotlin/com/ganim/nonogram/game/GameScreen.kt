@@ -398,7 +398,14 @@ private fun ResultsCard(state: GameChrome, onNext: () -> Unit, modifier: Modifie
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("Solved", style = MaterialTheme.typography.titleMedium)
+            // For a hand-drawn picture, the name is the payoff - the moment the grid
+            // you just filled turns out to be a thing. It leads, and the stats follow.
+            if (state.pictureName.isNotEmpty()) {
+                Text("You drew", style = MaterialTheme.typography.labelLarge)
+                Text(state.pictureName, style = MaterialTheme.typography.headlineSmall)
+            } else {
+                Text("Solved", style = MaterialTheme.typography.titleMedium)
+            }
             Text(formatTime(state.elapsedSeconds), style = MaterialTheme.typography.titleMedium)
             Text(
                 "${state.mistakes} mistakes  ·  ${state.difficultyLabel}",

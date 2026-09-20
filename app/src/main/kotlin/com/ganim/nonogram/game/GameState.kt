@@ -128,6 +128,8 @@ data class GameChrome(
     val longestRowClue: Int,
     val longestColClue: Int,
     val difficultyLabel: String,
+    /** What the finished grid depicts, for hand-drawn pictures. Empty otherwise. */
+    val pictureName: String,
     val elapsedSeconds: Int,
     val livesRemaining: Int,
     val paintMode: PaintMode,
@@ -146,6 +148,7 @@ fun GameState.chrome(): GameChrome = GameChrome(
     longestRowClue = puzzle.rowClues.maxOf { it.values.size }.coerceAtLeast(1),
     longestColClue = puzzle.colClues.maxOf { it.values.size }.coerceAtLeast(1),
     difficultyLabel = puzzle.difficulty.name.lowercase(),
+    pictureName = puzzle.name,
     elapsedSeconds = (elapsedMs / 1000L).toInt(),
     livesRemaining = livesRemaining,
     paintMode = paintMode,

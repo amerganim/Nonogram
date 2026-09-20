@@ -21,6 +21,14 @@ data class Puzzle(
     val solution: BooleanArray,
     val difficulty: Difficulty,
     val solveDepth: Int,
+    /**
+     * What the finished picture shows, for the hand-drawn puzzles.
+     *
+     * Empty for generated ones. They are shaped into blobs rather than drawn, so there
+     * is nothing honest to call them - naming a blob "Cloud" would be worse than leaving
+     * it unnamed.
+     */
+    val name: String = "",
 ) {
     init {
         require(width > 0 && height > 0) { "Puzzle must have positive dimensions, got ${width}x$height" }
@@ -47,6 +55,7 @@ data class Puzzle(
         if (this === other) return true
         if (other !is Puzzle) return false
         return id == other.id &&
+            name == other.name &&
             width == other.width &&
             height == other.height &&
             difficulty == other.difficulty &&
@@ -67,7 +76,8 @@ data class Puzzle(
     }
 
     override fun toString(): String =
-        "Puzzle(id=$id, ${width}x$height, $difficulty, depth=$solveDepth)"
+        "Puzzle(id=$id, ${width}x$height, $difficulty, depth=$solveDepth" +
+            (if (name.isEmpty()) "" else ", \"$name\"") + ")"
 
     companion object {
 
@@ -85,6 +95,7 @@ data class Puzzle(
             solution: BooleanArray,
             difficulty: Difficulty,
             solveDepth: Int,
+            name: String = "",
         ): Puzzle = Puzzle(
             id = stableId(width, height, solution),
             width = width,
@@ -94,6 +105,7 @@ data class Puzzle(
             solution = solution,
             difficulty = difficulty,
             solveDepth = solveDepth,
+            name = name,
         )
 
         /** Parses a grid written as rows of '#' (filled) and '.' (empty). For tests and fixtures. */

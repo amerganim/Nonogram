@@ -30,6 +30,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ganim.nonogram.data.repo.PuzzleCollection
 import com.ganim.nonogram.puzzle.model.Difficulty
 import com.ganim.nonogram.ui.theme.LocalBoardColors
 
@@ -43,6 +44,10 @@ import com.ganim.nonogram.ui.theme.LocalBoardColors
  * Scrolling 5,000 entries without jank is the acceptance criterion, so nothing here
  * decodes a grid until its thumbnail is actually on screen, and the filtered list comes
  * from a pre-built index of record headers rather than from decoded puzzles.
+ *
+ * The Pictures tab is the second collection: hand-drawn grids that resolve into a
+ * recognisable thing. Their names stay hidden until they are solved - a thumbnail that
+ * announced "Cat" would give away the answer, and the recognition is the whole point.
  */
 @Composable
 fun ArchiveScreen(
@@ -55,24 +60,41 @@ fun ArchiveScreen(
 
     Column(modifier.fillMaxSize().background(colors.boardBackground)) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            val showingPictures = state.collection == PuzzleCollection.PICTURE
+            FilterRow(
+                labels = listOf("Puzzles", "Pictures (${state.pictureCount})"),
+                values = listOf(PuzzleCollection.GENERATED, PuzzleCollection.PICTURE),
+                selected = state.collection,
+                onSelect = { viewModel.setCollection(it ?: PuzzleCollection.GENERATED) },
+                allowNone = false,
+            )
+
             Text(
-                "${state.visible.size} of ${state.total} puzzles  ·  ${state.completedCount} solved",
+                if (showingPictures) {
+                    "${state.visible.size} of ${state.total} pictures  ·  ${state.completedHere} revealed"
+                } else {
+                    "${state.visible.size} of ${state.total} puzzles  ·  ${state.completedCount} solved"
+                },
                 style = MaterialTheme.typography.labelLarge,
                 color = colors.textMuted,
             )
 
-            FilterRow(
-                labels = state.sizes.map { "${it}x$it" },
-                values = state.sizes,
-                selected = state.sizeFilter,
-                onSelect = viewModel::setSizeFilter,
-            )
-            FilterRow(
-                labels = Difficulty.entries.map { it.name.lowercase() },
-                values = Difficulty.entries,
-                selected = state.difficultyFilter,
-                onSelect = viewModel::setDifficultyFilter,
-            )
+            // Twenty-three drawings fit on two screens, so size and difficulty chips
+            // would only be clutter there.
+            if (!showingPictures) {
+                FilterRow(
+                    labels = state.sizes.map { "${it}x$it" },
+                    values = state.sizes,
+                    selected = state.sizeFilter,
+                    onSelect = viewModel::setSizeFilter,
+                )
+                FilterRow(
+                    labels = Difficulty.entries.map { it.name.lowercase() },
+                    values = Difficulty.entries,
+                    selected = state.difficultyFilter,
+                    onSelect = viewModel::setDifficultyFilter,
+                )
+            }
             FilterRow(
                 labels = CompletionFilter.entries.map { it.label },
                 values = CompletionFilter.entries,
@@ -92,8 +114,8 @@ fun ArchiveScreen(
                 ArchiveThumbnail(
                     entry = entry,
                     // Only a visible thumbnail decodes its grid.
-                    solution = remember(entry.id) {
-                        if (entry.completed) viewModel.solutionFor(entry.index) else null
+                    solution = remember(entry.id, entry.completed) {
+                        if (entry.completed) viewModel.solutionFor(entry) else null
                     },
                     onClick = { onOpen(entry.id) },
                 )
@@ -191,10 +213,12 @@ private fun ArchiveThumbnail(
                 }
             }
         }
+        // The name is a reward, not a label: revealed once the picture is solved.
         Text(
-            "${entry.size}x${entry.size}",
+            if (entry.completed && entry.name.isNotEmpty()) entry.name else "${entry.size}x${entry.size}",
             style = MaterialTheme.typography.labelLarge,
-            color = colors.textMuted,
+            color = if (entry.completed && entry.name.isNotEmpty()) colors.accent else colors.textMuted,
+            maxLines = 1,
         )
     }
 }

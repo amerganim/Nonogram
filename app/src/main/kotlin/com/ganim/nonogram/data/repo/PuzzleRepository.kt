@@ -8,12 +8,18 @@ import com.ganim.nonogram.puzzle.model.Difficulty
 import com.ganim.nonogram.puzzle.model.Puzzle
 import java.time.LocalDate
 
+/** Which collection a puzzle comes from. */
+enum class PuzzleCollection { GENERATED, PICTURE }
+
 /** One entry in the archive listing: enough to draw a thumbnail without decoding a grid. */
 data class ArchiveEntry(
     val index: Int,
     val id: String,
     val size: Int,
     val difficulty: Difficulty,
+    val collection: PuzzleCollection = PuzzleCollection.GENERATED,
+    /** What the finished picture shows. Empty for generated puzzles. */
+    val name: String = "",
 )
 
 /**
@@ -25,7 +31,10 @@ data class ArchiveEntry(
  * selector has a stable pool to index into. Decoding a full [Puzzle] happens only when
  * one is actually opened.
  */
-class PuzzleRepository(private val loader: PuzzlePackLoader) {
+class PuzzleRepository(
+    private val loader: PuzzlePackLoader,
+    private val pictureLoader: PuzzlePackLoader,
+) {
 
     /**
      * The archive index, in pack order.
@@ -35,7 +44,34 @@ class PuzzleRepository(private val loader: PuzzlePackLoader) {
      */
     val entries: List<ArchiveEntry> by lazy {
         loader.summaries().map { summary ->
-            ArchiveEntry(summary.index, summary.id, summary.width, summary.difficulty)
+            ArchiveEntry(
+                index = summary.index,
+                id = summary.id,
+                size = summary.width,
+                difficulty = summary.difficulty,
+                collection = PuzzleCollection.GENERATED,
+            )
+        }
+    }
+
+    /**
+     * The hand-drawn pictures, in their own pack.
+     *
+     * Deliberately not merged into [entries]. The daily selector draws from pools
+     * filtered out of the generated pack, so folding these in would change every pool
+     * size and therefore every daily ever assigned - and twenty-three drawings would be
+     * used up in a month. They are a place to go, not part of the rotation.
+     */
+    val pictures: List<ArchiveEntry> by lazy {
+        pictureLoader.summaries().map { summary ->
+            ArchiveEntry(
+                index = summary.index,
+                id = summary.id,
+                size = summary.width,
+                difficulty = summary.difficulty,
+                collection = PuzzleCollection.PICTURE,
+                name = summary.name,
+            )
         }
     }
 
@@ -44,11 +80,22 @@ class PuzzleRepository(private val loader: PuzzlePackLoader) {
         entries.associate { it.id to it.index }
     }
 
+    private val pictureIndexById: Map<String, Int> by lazy {
+        pictures.associate { it.id to it.index }
+    }
+
     val count: Int get() = entries.size
 
     fun puzzleAt(index: Int): Puzzle = loader.puzzleAt(index)
 
-    fun puzzleById(id: String): Puzzle? = indexById[id]?.let { loader.puzzleAt(it) }
+    /** Resolves an id in either collection. */
+    fun puzzleById(id: String): Puzzle? =
+        indexById[id]?.let { loader.puzzleAt(it) }
+            ?: pictureIndexById[id]?.let { pictureLoader.puzzleAt(it) }
+
+    fun pictureAt(index: Int): Puzzle = pictureLoader.puzzleAt(index)
+
+    val pictureCount: Int get() = pictures.size
 
     /** Archive filters (6.4): by size, difficulty, or both. Nothing is ever locked. */
     fun filter(size: Int? = null, difficulty: Difficulty? = null): List<ArchiveEntry> =

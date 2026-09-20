@@ -59,6 +59,20 @@ class PuzzlePackTest {
     }
 
     @Test
+    @DisplayName("format v2: a puzzle's name survives the round trip")
+    fun `names round trip`() {
+        val named = samplePuzzles().mapIndexed { i, puzzle ->
+            // Names are variable length and sit between the header and the bitset, so a
+            // mis-sized name field corrupts every record after it, not just its own.
+            if (i % 2 == 0) puzzle.copy(name = "Picture $i") else puzzle
+        }
+        val bytes = PuzzlePack.encode(named)
+        PuzzlePack.decodeAll(bytes).map { it.name } shouldBe named.map { it.name }
+        named.indices.forEach { i -> PuzzlePack.decodeAt(bytes, i) shouldBe named[i] }
+        PuzzlePack.estimatedSize(named) shouldBe bytes.size
+    }
+
+    @Test
     fun `header reports version and count`() {
         val puzzles = samplePuzzles()
         val header = PuzzlePack.readHeader(PuzzlePack.encode(puzzles))

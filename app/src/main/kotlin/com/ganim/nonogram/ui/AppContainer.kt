@@ -35,7 +35,10 @@ class AppContainer(context: Context, val clock: GameClock = GameClock.System) {
     private val database by lazy { NonogramDatabase.get(appContext) }
 
     val puzzles: PuzzleRepository by lazy {
-        PuzzleRepository(PuzzlePackLoader(appContext.assets))
+        PuzzleRepository(
+            loader = PuzzlePackLoader(appContext.assets),
+            pictureLoader = PuzzlePackLoader(appContext.assets, PuzzlePackLoader.PICTURES_ASSET),
+        )
     }
 
     val progress: ProgressRepository by lazy {

@@ -66,5 +66,8 @@ class PuzzlePackLoader(
 
     companion object {
         const val DEFAULT_ASSET = "puzzles.bin"
+
+        /** The hand-drawn picture puzzles, kept in their own pack. */
+        const val PICTURES_ASSET = "pictures.bin"
     }
 }

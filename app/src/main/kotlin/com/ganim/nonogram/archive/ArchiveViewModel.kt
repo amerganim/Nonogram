@@ -3,6 +3,7 @@ package com.ganim.nonogram.archive
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.ganim.nonogram.data.repo.PuzzleCollection
 import com.ganim.nonogram.data.repo.ProgressRepository
 import com.ganim.nonogram.data.repo.PuzzleRepository
 import com.ganim.nonogram.puzzle.model.Difficulty
@@ -28,11 +29,18 @@ data class ArchiveItem(
     val difficulty: Difficulty,
     val completed: Boolean,
     val inProgress: Boolean,
+    val collection: PuzzleCollection,
+    /** What the finished picture shows. Empty for generated puzzles. */
+    val name: String,
 )
 
 data class ArchiveUiState(
+    val collection: PuzzleCollection = PuzzleCollection.GENERATED,
+    val pictureCount: Int = 0,
     val total: Int = 0,
     val completedCount: Int = 0,
+    /** Solved out of [total], within the collection being shown. */
+    val completedHere: Int = 0,
     val sizes: List<Int> = emptyList(),
     val sizeFilter: Int? = null,
     val difficultyFilter: Difficulty? = null,
@@ -55,6 +63,7 @@ class ArchiveViewModel(
     private val sizeFilter = MutableStateFlow<Int?>(null)
     private val difficultyFilter = MutableStateFlow<Difficulty?>(null)
     private val completionFilter = MutableStateFlow(CompletionFilter.ALL)
+    private val collection = MutableStateFlow(PuzzleCollection.GENERATED)
 
     private val _state = MutableStateFlow(ArchiveUiState())
     val state: StateFlow<ArchiveUiState> = _state.asStateFlow()
@@ -64,11 +73,18 @@ class ArchiveViewModel(
             combine(
                 progress.observeCompletedIds(),
                 progress.observeInProgressIds(),
-                sizeFilter,
-                difficultyFilter,
+                combine(sizeFilter, difficultyFilter) { a, b -> a to b },
                 completionFilter,
-            ) { completed, started, size, difficulty, completion ->
-                val visible = puzzles.filter(size, difficulty).mapNotNull { entry ->
+                collection,
+            ) { completed, started, filters, completion, shownCollection ->
+                val (size, difficulty) = filters
+                val source = when (shownCollection) {
+                    PuzzleCollection.GENERATED -> puzzles.filter(size, difficulty)
+                    // Twenty-three drawings do not need size or difficulty filters; the
+                    // whole set fits on two screens.
+                    PuzzleCollection.PICTURE -> puzzles.pictures
+                }
+                val visible = source.mapNotNull { entry ->
                     val isCompleted = entry.id in completed
                     val isStarted = entry.id in started
                     val keep = when (completion) {
@@ -87,13 +103,18 @@ class ArchiveViewModel(
                             difficulty = entry.difficulty,
                             completed = isCompleted,
                             inProgress = isStarted,
+                            collection = entry.collection,
+                            name = entry.name,
                         )
                     }
                 }
 
                 ArchiveUiState(
-                    total = puzzles.count,
+                    collection = shownCollection,
+                    pictureCount = puzzles.pictureCount,
+                    total = if (shownCollection == PuzzleCollection.PICTURE) puzzles.pictureCount else puzzles.count,
                     completedCount = completed.size,
+                    completedHere = source.count { it.id in completed },
                     sizes = puzzles.availableSizes,
                     sizeFilter = size,
                     difficultyFilter = difficulty,
@@ -102,6 +123,10 @@ class ArchiveViewModel(
                 )
             }.collect { _state.value = it }
         }
+    }
+
+    fun setCollection(value: PuzzleCollection) {
+        collection.value = value
     }
 
     fun setSizeFilter(size: Int?) {
@@ -117,7 +142,10 @@ class ArchiveViewModel(
     }
 
     /** Decodes one grid, for a thumbnail that has scrolled into view. */
-    fun solutionFor(index: Int): BooleanArray = puzzles.puzzleAt(index).solution
+    fun solutionFor(item: ArchiveItem): BooleanArray = when (item.collection) {
+        PuzzleCollection.GENERATED -> puzzles.puzzleAt(item.index).solution
+        PuzzleCollection.PICTURE -> puzzles.pictureAt(item.index).solution
+    }
 
     class Factory(
         private val puzzles: PuzzleRepository,

@@ -4,7 +4,13 @@ import com.ganim.nonogram.puzzle.generator.DifficultyRater
 import com.ganim.nonogram.puzzle.generator.PuzzleGenerator
 import com.ganim.nonogram.puzzle.model.Difficulty
 import com.ganim.nonogram.puzzle.model.Puzzle
+import com.ganim.nonogram.puzzle.model.Grid
 import com.ganim.nonogram.puzzle.pack.PuzzlePack
+import com.ganim.nonogram.puzzle.pictures.PictureLibrary
+import com.ganim.nonogram.puzzle.solver.BacktrackingVerifier
+import com.ganim.nonogram.puzzle.solver.PuzzleSolver
+import com.ganim.nonogram.puzzle.solver.SolveResult
+import com.ganim.nonogram.puzzle.solver.Verification
 import java.io.File
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
@@ -41,6 +47,7 @@ object GeneratePack {
     private const val DEFAULT_SEED = 20260919L
     private const val DEFAULT_THREADS = 8
     private const val DEFAULT_OUT = "src/main/assets/puzzles.bin"
+    private const val PICTURES_OUT = "pictures.bin"
 
     /** Plan 4.5: "If the pack exceeds 1 MB, the encoding is wrong." */
     private const val SIZE_BUDGET_BYTES = 1024 * 1024
@@ -50,6 +57,11 @@ object GeneratePack {
 
         if (args.calibrate) {
             calibrate(args)
+            return
+        }
+
+        if (args.pictures) {
+            checkPictures()
             return
         }
 
@@ -87,9 +99,54 @@ object GeneratePack {
         println("Wrote ${bytes.size} bytes (${"%.1f".format(bytes.size / 1024.0)} KB) to $out")
         summarise(puzzles)
 
+        writePicturePack(File(out.parentFile, PICTURES_OUT).absoluteFile)
+
         if (bytes.size > SIZE_BUDGET_BYTES) {
             System.err.println("Pack is ${bytes.size} bytes, over the ${SIZE_BUDGET_BYTES} byte budget.")
             exitProcess(1)
+        }
+    }
+
+    /**
+     * Writes the hand-drawn pictures as their own pack.
+     *
+     * Kept separate from the generated puzzles on purpose. The daily selector draws from
+     * pools filtered out of `puzzles.bin`, so folding the pictures in would change every
+     * pool size and therefore every daily puzzle ever assigned - and it would spend the
+     * whole library inside a couple of months. As a separate pack they stay a section
+     * the player chooses to visit.
+     *
+     * Every drawing is re-checked here rather than trusted. A picture that stopped being
+     * logic-solvable after an edit must fail the build, not ship.
+     */
+    private fun writePicturePack(out: File) {
+        val solver = PuzzleSolver()
+        val puzzles = PictureLibrary.all.map { picture ->
+            val size = picture.size
+            val cells = picture.cells()
+            val rowClues = Grid.rowClues(size, size, cells)
+            val colClues = Grid.columnClues(size, size, cells)
+            val run = solver.run(size, size, rowClues, colClues)
+            val depth = (run.result as? SolveResult.Unique)?.depth
+                ?: error("Picture '${picture.name}' is not solvable by logic: ${run.result}")
+
+            Puzzle.fromSolution(
+                width = size,
+                height = size,
+                solution = cells,
+                difficulty = DifficultyRater.rate(size, depth, run.stats),
+                solveDepth = depth,
+                name = picture.name,
+            )
+        }
+
+        val bytes = PuzzlePack.encode(puzzles)
+        out.parentFile?.mkdirs()
+        out.writeBytes(bytes)
+        println()
+        println("Wrote ${puzzles.size} hand-drawn pictures (${bytes.size} bytes) to $out")
+        puzzles.groupBy { it.width }.toSortedMap().forEach { (size, group) ->
+            println("  ${size}x$size: ${group.joinToString(", ") { it.name }}")
         }
     }
 
@@ -225,6 +282,49 @@ object GeneratePack {
         }
     }
 
+    /**
+     * Reports which hand-drawn pictures survive the same bar as a generated puzzle.
+     *
+     * A drawing being nice has nothing to do with it being solvable. Anything that
+     * stalls the logic solver, or that a search finds more than one solution for, cannot
+     * ship - so this says which, and why, before the pack is built.
+     */
+    private fun checkPictures() {
+        val solver = PuzzleSolver()
+        val verifier = BacktrackingVerifier()
+        var ok = 0
+
+        println("Checking ${PictureLibrary.all.size} hand-drawn pictures")
+        println()
+        PictureLibrary.all.forEach { picture ->
+            val size = picture.size
+            val cells = picture.cells()
+            val rowClues = Grid.rowClues(size, size, cells)
+            val colClues = Grid.columnClues(size, size, cells)
+
+            val run = solver.run(size, size, rowClues, colClues)
+            val verdict = when (val result = run.result) {
+                is SolveResult.Unique -> {
+                    val counted = verifier.countSolutions(size, size, rowClues, colClues)
+                    if (counted == Verification.Counted(1, 2)) {
+                        ok++
+                        "OK    depth ${result.depth}, ${DifficultyRater.rate(size, result.depth, run.stats)}"
+                    } else {
+                        "BAD   logic solved it but search found $counted"
+                    }
+                }
+                SolveResult.Ambiguous -> {
+                    val counted = verifier.countSolutions(size, size, rowClues, colClues, cap = 4)
+                    "STALL needs guessing; search says $counted"
+                }
+                SolveResult.Contradiction -> "BROKEN clues contradict"
+            }
+            println("  ${picture.name.padEnd(12)} ${size}x$size  $verdict")
+        }
+        println()
+        println("$ok of ${PictureLibrary.all.size} are shippable")
+    }
+
     // --- reporting -------------------------------------------------------------------
 
     private fun summarise(puzzles: List<Puzzle>) {
@@ -260,6 +360,7 @@ object GeneratePack {
         val threads: Int,
         val calibrate: Boolean,
         val sample: Int,
+        val pictures: Boolean,
     ) {
         companion object {
             fun parse(argv: Array<String>): Args {
@@ -276,6 +377,7 @@ object GeneratePack {
                     threads = values["threads"]?.toInt() ?: DEFAULT_THREADS,
                     calibrate = values["calibrate"] == "true",
                     sample = values["sample"]?.toInt() ?: 2_000,
+                    pictures = values["pictures"] == "true",
                 )
             }
         }
