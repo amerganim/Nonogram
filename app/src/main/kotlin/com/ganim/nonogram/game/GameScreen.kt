@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.ui.geometry.Size
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -398,6 +399,11 @@ private fun ResultsCard(state: GameChrome, onNext: () -> Unit, modifier: Modifie
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            // The card sits over the board, so it shows the finished picture itself -
+            // without the grid lines, clue gutters and half-drawn crosses that were
+            // scaffolding for solving it and are clutter now that it is solved.
+            SolvedPicture(state)
+
             // For a hand-drawn picture, the name is the payoff - the moment the grid
             // you just filled turns out to be a thing. It leads, and the stats follow.
             if (state.pictureName.isNotEmpty()) {
@@ -414,6 +420,37 @@ private fun ResultsCard(state: GameChrome, onNext: () -> Unit, modifier: Modifie
             )
             Spacer(Modifier.size(4.dp))
             Button(onClick = onNext) { Text("Done") }
+        }
+    }
+}
+
+/** The completed grid, drawn plainly, at a size that fits inside the results card. */
+@Composable
+private fun SolvedPicture(state: GameChrome) {
+    val colors = LocalBoardColors.current
+    Canvas(
+        Modifier
+            .size(132.dp)
+            .semantics {
+                contentDescription = if (state.pictureName.isNotEmpty()) {
+                    "The finished picture: ${state.pictureName}"
+                } else {
+                    "The finished picture"
+                }
+            },
+    ) {
+        val cell = minOf(size.width / state.width, size.height / state.height)
+        val originX = (size.width - cell * state.width) / 2f
+        val originY = (size.height - cell * state.height) / 2f
+        for (row in 0 until state.height) {
+            for (col in 0 until state.width) {
+                if (!state.solution[row * state.width + col]) continue
+                drawRect(
+                    colors.cellFilled,
+                    Offset(originX + col * cell, originY + row * cell),
+                    Size(cell, cell),
+                )
+            }
         }
     }
 }

@@ -22,6 +22,15 @@ data class Settings(
 
     /** Null follows the system, which is what most players want. */
     val darkThemeOverride: Boolean? = null,
+
+    /**
+     * Whether the How to play walkthrough has been opened.
+     *
+     * Set when the screen is shown, not when it is finished. A player who backs out
+     * halfway has made a decision, and an app that keeps reopening a tutorial they
+     * dismissed is worse than one that trusts them - it stays in Settings either way.
+     */
+    val tutorialSeen: Boolean = false,
 )
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -43,6 +52,7 @@ class SettingsRepository(private val context: Context) {
             Settings(
                 hapticsEnabled = prefs[HAPTICS] ?: true,
                 darkThemeOverride = prefs[DARK_THEME],
+                tutorialSeen = prefs[TUTORIAL_SEEN] ?: false,
             )
         }
 
@@ -56,8 +66,13 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
+    suspend fun setTutorialSeen(seen: Boolean) {
+        context.settingsDataStore.edit { it[TUTORIAL_SEEN] = seen }
+    }
+
     private companion object {
         val HAPTICS = booleanPreferencesKey("haptics_enabled")
+        val TUTORIAL_SEEN = booleanPreferencesKey("tutorial_seen")
         val DARK_THEME = booleanPreferencesKey("dark_theme")
     }
 }

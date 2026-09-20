@@ -1,6 +1,7 @@
 package com.ganim.nonogram.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,6 +36,7 @@ fun SettingsScreen(
     completedCount: Int,
     onHapticsChanged: (Boolean) -> Unit,
     onThemeChanged: (Boolean?) -> Unit,
+    onHowToPlay: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalBoardColors.current
@@ -46,6 +48,21 @@ fun SettingsScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        // First, because someone who opens Settings while stuck is looking for this.
+        Card(
+            Modifier.fillMaxWidth().clickable(onClick = onHowToPlay),
+            shape = RoundedCornerShape(16.dp),
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Text("How to play", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Watch a puzzle get solved, one deduction at a time.",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = colors.textMuted,
+                )
+            }
+        }
+
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
             Row(
                 Modifier.fillMaxWidth().padding(16.dp),

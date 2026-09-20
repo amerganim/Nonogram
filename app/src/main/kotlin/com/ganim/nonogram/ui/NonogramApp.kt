@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.activity.compose.LocalActivity
 import androidx.compose.ui.Modifier
@@ -39,6 +40,7 @@ import com.ganim.nonogram.game.GameViewModel
 import com.ganim.nonogram.monetize.AdTrigger
 import com.ganim.nonogram.monetize.RewardPolicy
 import com.ganim.nonogram.ui.theme.NonogramTheme
+import com.ganim.nonogram.ui.tutorial.HowToPlayScreen
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -47,6 +49,7 @@ private object Routes {
     const val DAILY = "daily"
     const val ARCHIVE = "archive"
     const val SETTINGS = "settings"
+    const val HOW_TO_PLAY = "howtoplay"
     const val GAME = "game/{puzzleId}?date={date}"
 
     fun game(puzzleId: String, date: LocalDate?): String =
@@ -120,7 +123,10 @@ private fun NavIcon(glyph: NavGlyph, selected: Boolean) {
  */
 @Composable
 fun NonogramApp(container: AppContainer) {
-    val settings by container.settings.settings.collectAsState(initial = Settings())
+    // Nullable until DataStore answers. A non-null default would report "tutorial not
+    // seen" for the first frame and open the walkthrough at every launch.
+    val loadedSettings by container.settings.settings.collectAsState(initial = null)
+    val settings = loadedSettings ?: Settings()
     val completedCount by container.progress.observeCompletedCount().collectAsState(initial = 0)
     val entitlements by container.billing.entitlements.collectAsState()
     val wallet by container.monetization.wallet.collectAsState(initial = null)
@@ -132,6 +138,17 @@ fun NonogramApp(container: AppContainer) {
             ?: androidx.compose.foundation.isSystemInDarkTheme(),
     ) {
         val navController = rememberNavController()
+
+        // Shown once, on the first launch that reaches this point. Marked seen on the
+        // way in rather than on the way out - see Settings.tutorialSeen.
+        var tutorialOffered by rememberSaveable { mutableStateOf(false) }
+        LaunchedEffect(loadedSettings) {
+            val known = loadedSettings ?: return@LaunchedEffect
+            if (tutorialOffered) return@LaunchedEffect
+            tutorialOffered = true
+            if (!known.tutorialSeen) navController.navigate(Routes.HOW_TO_PLAY)
+        }
+
         val backStack by navController.currentBackStackEntryAsState()
         val currentRoute = backStack?.destination?.route
         val showBar = currentRoute in destinations.map { it.route }
@@ -196,7 +213,13 @@ fun NonogramApp(container: AppContainer) {
                         onThemeChanged = { dark ->
                             scope.launch { container.settings.setDarkThemeOverride(dark) }
                         },
+                        onHowToPlay = { navController.navigate(Routes.HOW_TO_PLAY) },
                     )
+                }
+
+                composable(Routes.HOW_TO_PLAY) {
+                    LaunchedEffect(Unit) { container.settings.setTutorialSeen(true) }
+                    HowToPlayScreen(onDone = { navController.popBackStack() })
                 }
 
                 composable(Routes.GAME) { entry ->

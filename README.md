@@ -19,8 +19,9 @@ Built against `nonogram-app-build-plan.md`. Phases run in order; see **Status** 
 | 6 | Hardening | **Built**, verified on device — crash reporting is a human step |
 | 7 | Store assets | **Complete** — see `store/` |
 | 8 | Publishing (human-operated) | **Start now, in parallel** — see below |
+| — | Onboarding and picture puzzles | **Built**, verified on device — see below |
 
-**247 tests, 0 failures**, running in about 6 seconds.
+**259 tests, 0 failures**, running in about 7 seconds.
 
 ### Phase 4 acceptance criteria
 
@@ -49,6 +50,30 @@ Animation durations live in `Motion` so reduce-motion applies in one place.
       **476 frames, 1 janky (0.21%), p50 12 ms** over sustained flinging
 - [x] Progress survives app kill — confirmed on device. *App update* is still untested
       in the sense that matters: there is only a v1 schema, so no migration exists yet.
+
+### Beyond the plan — teaching the game, and giving it a payoff
+
+Neither of these is in the build plan. Both address the same gap: the plan gets a player
+to a correct board and stops.
+
+**How to play** (`ui/tutorial/`). There was no explanation of the rules anywhere in the
+app. Rather than a page of prose, the screen animates a full solve of a 5×5 puzzle, one
+deduction at a time, with the reason on screen and the row or column it applies to
+highlighted. The point it has to land is that *no step is a guess* — a player who thinks
+nonograms involve guessing will play one badly and quit. It opens itself on first launch
+and lives permanently at the top of Settings.
+
+The script is pure Kotlin (`puzzle/tutorial/TutorialLesson.kt`) so it can be checked
+rather than trusted: `TutorialLessonTest` runs the real solver over the lesson puzzle,
+and asserts every move agrees with the answer and that the steps decide all 25 squares
+exactly once. A tutorial that teaches a wrong move is worse than no tutorial.
+
+**Picture puzzles** (`puzzle/pictures/`). The generator makes contiguous blobs, which
+look organic but are not *pictures*; recognition is the payoff a nonogram exists for. 23
+hand-drawn, named grids ship as a second pack, held to the same bar as a generated
+puzzle — logic-solvable, exactly one solution, checked on every test run. They are a
+separate collection in the archive rather than part of the daily rotation, for reasons
+in `docs/picture-puzzles.md`. The name stays hidden until the picture is solved.
 
 ### Phase 7 — store assets
 
@@ -214,6 +239,8 @@ app/src/main/kotlin/com/ganim/nonogram/
 │   ├── solver/      # LineSolver, PuzzleSolver, BacktrackingVerifier
 │   ├── generator/   # PuzzleGenerator, GridShaper, DifficultyRater
 │   ├── pack/        # Binary pack codec
+│   ├── pictures/    # 23 hand-drawn named grids
+│   ├── tutorial/    # The scripted solve the How to play screen animates
 │   └── tools/       # Offline generation entry point
 ├── daily/           # DailySchedule, DailySelector, StreakCalculator, calendar screen
 ├── archive/         # Browser over all 5,000 puzzles
@@ -233,7 +260,8 @@ app/src/main/kotlin/com/ganim/nonogram/
 │   ├── BoardGestures# tap / drag / long-press / pinch
 │   └── GameViewModel
 ├── ui/              # Navigation, settings screen, AppContainer
-│   └── theme/       # The only place a colour literal may appear
+│   ├── theme/       # The only place a colour literal may appear
+│   └── tutorial/    # How to play - the animated walkthrough
 └── MainActivity.kt
 ```
 

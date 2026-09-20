@@ -130,6 +130,14 @@ data class GameChrome(
     val difficultyLabel: String,
     /** What the finished grid depicts, for hand-drawn pictures. Empty otherwise. */
     val pictureName: String,
+    /**
+     * The completed picture, for the results card to show.
+     *
+     * An array in a class documented as holding primitives, but it is the same instance
+     * every time - it comes straight off the immutable puzzle - so identity equality is
+     * both correct and as cheap as the rest.
+     */
+    val solution: BooleanArray,
     val elapsedSeconds: Int,
     val livesRemaining: Int,
     val paintMode: PaintMode,
@@ -149,6 +157,7 @@ fun GameState.chrome(): GameChrome = GameChrome(
     longestColClue = puzzle.colClues.maxOf { it.values.size }.coerceAtLeast(1),
     difficultyLabel = puzzle.difficulty.name.lowercase(),
     pictureName = puzzle.name,
+    solution = puzzle.solution,
     elapsedSeconds = (elapsedMs / 1000L).toInt(),
     livesRemaining = livesRemaining,
     paintMode = paintMode,

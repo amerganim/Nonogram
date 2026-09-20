@@ -44,11 +44,19 @@ def load_pack() -> list[dict]:
     offsets = [struct.unpack(">I", data[12 + 4 * i : 16 + 4 * i])[0] for i in range(count)]
     puzzles = []
     for i, off in enumerate(offsets):
+        # Pack format v2: width, height, difficulty, solveDepth, nameLength, name, bitset.
+        # The name is variable length, so the bitset does not start at a fixed offset -
+        # reading it as if it did paints a garbled board rather than failing outright.
         w, h, d = data[off], data[off + 1], data[off + 2]
+        name_len = data[off + 4]
+        name = data[off + 5 : off + 5 + name_len].decode("utf-8")
+        start = off + 5 + name_len
         nbytes = (w * h + 7) // 8
-        bits = data[off + 4 : off + 4 + nbytes]
+        bits = data[start : start + nbytes]
         cells = [(bits[k >> 3] >> (k & 7)) & 1 for k in range(w * h)]
-        puzzles.append({"index": i, "w": w, "h": h, "difficulty": DIFFICULTIES[d], "cells": cells})
+        puzzles.append(
+            {"index": i, "w": w, "h": h, "difficulty": DIFFICULTIES[d], "name": name, "cells": cells}
+        )
     return puzzles
 
 
