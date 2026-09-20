@@ -21,7 +21,7 @@ Built against `nonogram-app-build-plan.md`. Phases run in order; see **Status** 
 | 8 | Publishing (human-operated) | **Start now, in parallel** — see below |
 | — | Onboarding and picture puzzles | **Built**, verified on device — see below |
 
-**285 tests, 0 failures**, running in about 7 seconds.
+**291 tests, 0 failures**, running in about 7 seconds.
 
 ### Phase 4 acceptance criteria
 
