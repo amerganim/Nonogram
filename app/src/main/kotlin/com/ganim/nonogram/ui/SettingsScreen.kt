@@ -56,7 +56,7 @@ fun SettingsScreen(
                     Text(
                         "A tick on every cell you paint.",
                         style = MaterialTheme.typography.labelLarge,
-                        color = colors.clueTextSatisfied,
+                        color = colors.textMuted,
                     )
                 }
                 Switch(checked = settings.hapticsEnabled, onCheckedChange = onHapticsChanged)
@@ -89,7 +89,7 @@ fun SettingsScreen(
                 Text(
                     "$completedCount of 5,000",
                     style = MaterialTheme.typography.labelLarge,
-                    color = colors.clueTextSatisfied,
+                    color = colors.textMuted,
                 )
             }
         }

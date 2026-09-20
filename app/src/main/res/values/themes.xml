@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      Compose draws everything; this exists only so the window has a sane background
-      before the first frame. Phase 4 matches these to the real theme so launch does
-      not flash the wrong colour.
+      Compose draws everything; this only sets what the window shows before the first
+      frame. It must match the Compose paper colour exactly, or launch flashes a
+      different shade for a frame. Keep in step with PaperLight in ui/theme/Color.kt.
     -->
     <style name="Theme.DailyNonogram" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:windowBackground">#FFFAF9F7</item>
     </style>
 </resources>

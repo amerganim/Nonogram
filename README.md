@@ -14,13 +14,29 @@ Built against `nonogram-app-build-plan.md`. Phases run in order; see **Status** 
 | 1 | Puzzle engine — solver, generator, pack | **Complete** |
 | 2 | Game screen | **Built**, 2 criteria need a device |
 | 3 | Shell (daily, archive, progress) | **Built**, 2 criteria need a device |
-| 4 | Visual design and theming | Not started |
+| 4 | Visual design and theming | **Built**, 1 criterion needs a device |
 | 5 | Monetization | Not started |
 | 6 | Hardening | Not started |
 | 7 | Store assets | Not started |
 | 8 | Publishing (human-operated) | **Start now, in parallel** — see below |
 
-**174 tests, 0 failures**, running in about 6 seconds.
+**213 tests, 0 failures**, running in about 6 seconds.
+
+### Phase 4 acceptance criteria
+
+- [x] Light and dark complete across every screen, no hardcoded colours outside the
+      theme — enforced by `ThemePurityTest`, which fails the build on a stray
+      `Color(0xFF…)` or a `tween(240)` that would dodge the reduce-motion setting
+- [x] Contrast ratios meet WCAG AA — `ThemeContrastTest` computes WCAG 2.1 relative
+      luminance for all 13 colour pairs in both themes, flattening translucent
+      foregrounds first so the ratio reflects what is actually on screen
+- [ ] **Usable at 200% system font scale** — every size is in `sp` and the toolbar is
+      built so the least important label gives way first, but this needs a device
+- [x] No grid rendering regression — theming changed colour values only; the canvas
+      still hoists its paints and allocates nothing per frame
+
+Dark is authored outright rather than derived by inverting light, and a test pins that.
+Animation durations live in `Motion` so reduce-motion applies in one place.
 
 ### Phase 3 acceptance criteria
 
@@ -113,7 +129,8 @@ app/src/main/kotlin/com/ganim/nonogram/
 │   ├── BoardCanvas  # one-pass Canvas rendering
 │   ├── BoardGestures# tap / drag / long-press / pinch
 │   └── GameViewModel
-├── ui/              # Navigation, settings screen, theme tokens, AppContainer
+├── ui/              # Navigation, settings screen, AppContainer
+│   └── theme/       # The only place a colour literal may appear
 └── MainActivity.kt
 ```
 

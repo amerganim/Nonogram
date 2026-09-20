@@ -58,7 +58,7 @@ fun ArchiveScreen(
             Text(
                 "${state.visible.size} of ${state.total} puzzles  ·  ${state.completedCount} solved",
                 style = MaterialTheme.typography.labelLarge,
-                color = colors.clueTextSatisfied,
+                color = colors.textMuted,
             )
 
             FilterRow(
@@ -187,14 +187,14 @@ private fun ArchiveThumbnail(
                         .background(colors.accent)
                         .padding(horizontal = 4.dp),
                 ) {
-                    Text("···", style = MaterialTheme.typography.labelLarge, color = colors.boardBackground)
+                    Text("···", style = MaterialTheme.typography.labelLarge, color = colors.onAccent)
                 }
             }
         }
         Text(
             "${entry.size}x${entry.size}",
             style = MaterialTheme.typography.labelLarge,
-            color = colors.clueTextSatisfied,
+            color = colors.textMuted,
         )
     }
 }

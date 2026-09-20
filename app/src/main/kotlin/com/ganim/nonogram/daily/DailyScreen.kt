@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -113,7 +114,7 @@ private fun StatTile(label: String, value: String, modifier: Modifier = Modifier
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Text(label, style = MaterialTheme.typography.labelLarge, color = colors.clueTextSatisfied)
+            Text(label, style = MaterialTheme.typography.labelLarge, color = colors.textMuted)
         }
     }
 }
@@ -130,7 +131,7 @@ private fun TodayCard(state: DailyUiState, onPlay: () -> Unit) {
             Text(
                 state.today.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault()),
                 style = MaterialTheme.typography.labelLarge,
-                color = colors.clueTextSatisfied,
+                color = colors.textMuted,
             )
             Text(
                 "${state.size}x${state.size}  ·  ${state.difficulty.name.lowercase()}",
@@ -184,7 +185,7 @@ private fun MonthView(
                         Modifier.weight(1f),
                         textAlign = TextAlign.Center,
                         style = MaterialTheme.typography.labelLarge,
-                        color = colors.clueTextSatisfied,
+                        color = colors.textMuted,
                     )
                 }
             }
@@ -208,11 +209,11 @@ private fun DayCell(day: CalendarDay, modifier: Modifier, onClick: () -> Unit) {
     val background = when {
         day.completed -> colors.accent
         day.started -> colors.highlight
-        else -> androidx.compose.ui.graphics.Color.Transparent
+        else -> Color.Transparent
     }
     val textColor = when {
-        day.completed -> colors.boardBackground
-        !day.inCurrentMonth || day.isFuture -> colors.clueTextSatisfied
+        day.completed -> colors.onAccent
+        !day.inCurrentMonth || day.isFuture -> colors.textMuted
         else -> colors.clueText
     }
 

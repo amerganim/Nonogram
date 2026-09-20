@@ -1,141 +1,76 @@
 package com.ganim.nonogram.ui.theme
 
+import android.provider.Settings
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Typography
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 
 /**
- * Theme scaffolding for Phase 2.
+ * The app theme (build plan section 7).
  *
- * Phase 4 (build plan 7) owns the real visual design. This exists so nothing in Phase 2
- * hard-codes a colour: every board colour is a token here, so Phase 4 changes values in
- * one file rather than hunting through the canvas code.
- *
- * Direction already set by the plan: "Calm, precise, uncluttered... one confident accent
- * colour, high-contrast grid. The reference point is a well-made physical puzzle book."
- * Dark is fully specified rather than derived, because the plan warns it is the default
- * for many puzzle players and must not be an afterthought. Stock Material purple is
- * deliberately avoided.
+ * Light and dark are both fully specified in [Color.kt]; nothing is derived by inverting
+ * the other. Animation timing and the reduce-motion setting live here too, so a screen
+ * never has to decide for itself how long something should take.
  */
-
-/**
- * Board colours the [androidx.compose.material3.ColorScheme] has no slot for.
- *
- * Kept separate because a nonogram grid needs distinctions Material does not model - a
- * filled cell, a cross, a wrong cell and a satisfied clue are not surfaces or containers.
- */
-@Immutable
-data class BoardColors(
-    val boardBackground: Color,
-    val cellEmpty: Color,
-    val cellFilled: Color,
-    val cellCross: Color,
-    val cellMistake: Color,
-    val gridLine: Color,
-    val gridLineMajor: Color,
-    val clueText: Color,
-    val clueTextSatisfied: Color,
-    val clueBackground: Color,
-    val highlight: Color,
-    val accent: Color,
-)
-
-private val InkLight = Color(0xFF1C2024)
-private val PaperLight = Color(0xFFFAF9F6)
-private val AccentTeal = Color(0xFF00696E)
-
-private val InkDark = Color(0xFFE6E4E0)
-private val PaperDark = Color(0xFF14171A)
-private val AccentTealDark = Color(0xFF4FD8DE)
-
-private val LightBoardColors = BoardColors(
-    boardBackground = PaperLight,
-    cellEmpty = Color(0xFFFFFFFF),
-    cellFilled = InkLight,
-    cellCross = Color(0xFF8A9199),
-    cellMistake = Color(0xFFB3261E),
-    gridLine = Color(0xFFD5D2CC),
-    gridLineMajor = Color(0xFF8A8F96),
-    clueText = InkLight,
-    clueTextSatisfied = Color(0xFFB4B0A8),
-    clueBackground = PaperLight,
-    highlight = AccentTeal.copy(alpha = 0.10f),
-    accent = AccentTeal,
-)
-
-private val DarkBoardColors = BoardColors(
-    boardBackground = PaperDark,
-    cellEmpty = Color(0xFF1E2226),
-    cellFilled = Color(0xFFE6E4E0),
-    cellCross = Color(0xFF6B737B),
-    cellMistake = Color(0xFFF2B8B5),
-    gridLine = Color(0xFF2E343A),
-    gridLineMajor = Color(0xFF5A636B),
-    clueText = InkDark,
-    clueTextSatisfied = Color(0xFF555C63),
-    clueBackground = PaperDark,
-    highlight = AccentTealDark.copy(alpha = 0.14f),
-    accent = AccentTealDark,
-)
-
-private val LightScheme = lightColorScheme(
-    primary = AccentTeal,
-    onPrimary = Color.White,
-    surface = PaperLight,
-    onSurface = InkLight,
-    background = PaperLight,
-    onBackground = InkLight,
-    error = Color(0xFFB3261E),
-)
-
-private val DarkScheme = darkColorScheme(
-    primary = AccentTealDark,
-    onPrimary = Color(0xFF00363A),
-    surface = PaperDark,
-    onSurface = InkDark,
-    background = PaperDark,
-    onBackground = InkDark,
-    error = Color(0xFFF2B8B5),
-)
 
 val LocalBoardColors = staticCompositionLocalOf { LightBoardColors }
 
 /**
- * Typography note (plan 7): clue numbers need tabular figures, because proportional
- * digits make a column of clues look misaligned and broken. The canvas draws clues with
- * a monospace paint for exactly that reason.
+ * True when the player has asked the system to reduce animation.
+ *
+ * Read from `ANIMATOR_DURATION_SCALE`, which is what the accessibility setting and
+ * developer options both write to. Compose has no first-class API for this, and the
+ * plan requires respecting it, so it is read directly and published here rather than
+ * each animation reaching for a ContentResolver.
  */
-private val AppTypography = Typography(
-    titleMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
-        fontSize = 18.sp,
-    ),
-    labelLarge = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
-        fontSize = 15.sp,
-    ),
-)
+val LocalReduceMotion = staticCompositionLocalOf { false }
+
+/**
+ * Animation durations.
+ *
+ * > "All animations under 300ms. Respect the reduce-motion system setting."
+ *
+ * Going through [Motion.duration] rather than hard-coding a number at each call site is
+ * what makes the reduce-motion setting actually work: one branch, applied everywhere.
+ */
+object Motion {
+    /** A state change the eye should barely register - a colour, a fade. */
+    const val QUICK = 140
+
+    /** A deliberate transition, e.g. the clue gutters fading on completion. */
+    const val STANDARD = 260
+
+    /** The ceiling the plan sets. Nothing may exceed it. */
+    const val MAXIMUM = 300
+
+    /** Zero when the player has asked for reduced motion, so transitions land instantly. */
+    fun duration(base: Int, reduceMotion: Boolean): Int = if (reduceMotion) 0 else base
+}
 
 @Composable
 fun NonogramTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    val boardColors = if (darkTheme) DarkBoardColors else LightBoardColors
-    CompositionLocalProvider(LocalBoardColors provides boardColors) {
+    val context = LocalContext.current
+    val reduceMotion = remember(context) {
+        runCatching {
+            Settings.Global.getFloat(
+                context.contentResolver,
+                Settings.Global.ANIMATOR_DURATION_SCALE,
+                1f,
+            ) == 0f
+        }.getOrDefault(false)
+    }
+
+    CompositionLocalProvider(
+        LocalBoardColors provides if (darkTheme) DarkBoardColors else LightBoardColors,
+        LocalReduceMotion provides reduceMotion,
+    ) {
         MaterialTheme(
             colorScheme = if (darkTheme) DarkScheme else LightScheme,
             typography = AppTypography,

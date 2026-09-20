@@ -38,9 +38,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ganim.nonogram.ui.theme.LocalBoardColors
+import com.ganim.nonogram.ui.theme.LocalReduceMotion
+import com.ganim.nonogram.ui.theme.Motion
 import kotlin.math.roundToInt
 
 /**
@@ -99,12 +102,13 @@ fun GameScreen(
     // Completion (5.3): the clue gutters fade out so the revealed picture stands on its
     // own, and only then does the results card arrive. Sequencing them rather than
     // running both at once is what makes the moment read as a reveal.
+    val reduceMotion = LocalReduceMotion.current
     val gutterAlpha = remember { Animatable(1f) }
     val resultsReveal = remember { Animatable(0f) }
-    LaunchedEffect(state.status) {
+    LaunchedEffect(state.status, reduceMotion) {
         if (state.status == GameStatus.COMPLETE) {
-            gutterAlpha.animateTo(0f, tween(GUTTER_FADE_MS))
-            resultsReveal.animateTo(1f, tween(RESULTS_FADE_MS))
+            gutterAlpha.animateTo(0f, tween(Motion.duration(Motion.STANDARD, reduceMotion)))
+            resultsReveal.animateTo(1f, tween(Motion.duration(Motion.STANDARD, reduceMotion)))
         } else {
             resultsReveal.snapTo(0f)
             gutterAlpha.snapTo(1f)
@@ -198,18 +202,27 @@ private fun GameToolbar(
                 text = formatTime(state.elapsedMs),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Medium,
+                maxLines = 1,
             )
             Spacer(Modifier.width(12.dp))
             Text(
                 text = "♥".repeat(state.livesRemaining) + "♡".repeat(GameState.MAX_LIVES - state.livesRemaining),
                 color = if (state.livesRemaining <= 1) MaterialTheme.colorScheme.error else colors.clueText,
                 style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
             )
             Spacer(Modifier.weight(1f))
             Text(
                 text = "${state.width}x${state.height} ${state.puzzle.difficulty.name.lowercase()}",
                 style = MaterialTheme.typography.labelLarge,
-                color = colors.clueTextSatisfied,
+                color = colors.textMuted,
+                // At 200% font scale this label would otherwise shove the timer and the
+                // lives off the screen. It is the least important thing in the row, so
+                // it is the one that gives way.
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+                textAlign = TextAlign.End,
             )
         }
 
@@ -288,7 +301,3 @@ private fun formatTime(elapsedMs: Long): String {
     val seconds = totalSeconds % 60
     return "%d:%02d".format(minutes, seconds)
 }
-
-/** Plan section 7: every animation under 300ms. */
-private const val GUTTER_FADE_MS = 260
-private const val RESULTS_FADE_MS = 240
