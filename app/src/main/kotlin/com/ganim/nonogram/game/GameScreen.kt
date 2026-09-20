@@ -208,6 +208,14 @@ fun GameScreen(
                 modifier = Modifier.fillMaxSize(),
             )
 
+            // Composes nothing unless a screen reader is exploring by touch (9).
+            BoardAccessibilityOverlay(
+                boardState = boardState,
+                metrics = metrics,
+                onCellActivated = viewModel::onTap,
+                modifier = Modifier.fillMaxSize(),
+            )
+
             if (resultsReveal.value > 0.01f) {
                 ResultsCard(
                     state = state,

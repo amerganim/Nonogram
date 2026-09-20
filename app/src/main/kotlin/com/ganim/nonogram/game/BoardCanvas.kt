@@ -17,6 +17,8 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import com.ganim.nonogram.puzzle.model.CellState
 import com.ganim.nonogram.ui.theme.BoardColors
 import com.ganim.nonogram.ui.theme.LocalBoardColors
@@ -57,7 +59,19 @@ fun BoardCanvas(
     val cache = remember(colors) { BoardRenderCache(colors) }
 
     Box(modifier) {
-        Canvas(Modifier.fillMaxSize()) {
+        Canvas(
+            Modifier
+                .fillMaxSize()
+                // Read inside the semantics lambda, not in composition. Semantics is its
+                // own phase; computing this during composition would recompose the screen
+                // on every painted cell, which is the problem the draw-phase read above
+                // exists to avoid.
+                .semantics {
+                    val state = boardState.value
+                    contentDescription = "Nonogram board, ${state.width} by ${state.height}. " +
+                        "${state.filledCount} of ${state.targetFilledCount} squares filled."
+                },
+        ) {
             // The board and the highlight are read *here*, inside the draw lambda, and
             // nowhere in composition. That makes a painted cell invalidate only the draw
             // phase instead of recomposing the screen.

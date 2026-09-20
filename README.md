@@ -16,7 +16,7 @@ Built against `nonogram-app-build-plan.md`. Phases run in order; see **Status** 
 | 3 | Shell (daily, archive, progress) | **Built**, verified on device |
 | 4 | Visual design and theming | **Built**, verified on device |
 | 5 | Monetization | **Built**, policy tested; SDK paths need Play test tracks |
-| 6 | Hardening | Not started |
+| 6 | Hardening | **Built**, verified on device — crash reporting is a human step |
 | 7 | Store assets | Not started |
 | 8 | Publishing (human-operated) | **Start now, in parallel** — see below |
 
@@ -49,6 +49,49 @@ Animation durations live in `Motion` so reduce-motion applies in one place.
       **476 frames, 1 janky (0.21%), p50 12 ms** over sustained flinging
 - [x] Progress survives app kill — confirmed on device. *App update* is still untested
       in the sense that matters: there is only a v1 schema, so no migration exists yet.
+
+### Phase 6 acceptance criteria
+
+All four measured on the minified release build, installed on the Galaxy A15.
+
+- [x] **Release build (minified) runs correctly.** This was the real risk — the plan
+      calls R8 breakage that only shows up in release "a classic late-stage disaster".
+      Verified end to end: Room wrote and read progress across a force-stop, the puzzle
+      pack decoded, DataStore settings persisted, no `ClassNotFoundException` or
+      `NoSuchMethodError`. The keep rules are correct. The purchase and ad cycle still
+      needs a Play test track and an AdMob account.
+- [x] **No crashes across a soak.** 4,000 random events through every screen on the
+      minified build: zero fatals, process still alive. Rotation mid-puzzle preserves
+      the board and does not crash.
+- [x] **App size under 15 MB** — release APK is **4.09 MB**.
+- [x] **Cold start under 2 seconds** — **501 ms** measured with `am start -W`.
+
+Accessibility: the board is a single `Canvas`, so a screen reader saw nothing. It now
+carries a summary, and each cell gets a real semantics node announcing its coordinates
+and state, with activation wired to painting — but **only when touch exploration is
+actually on**. Four hundred semantics nodes would undo the reason the grid is a canvas
+at all, so with TalkBack off this composes nothing.
+
+Verifying the release build needs a signing key and real AdMob IDs that no fresh clone
+has, so there is a local escape hatch:
+
+```bash
+./gradlew :app:assembleRelease -PlocalReleaseCheck=true
+```
+
+That signs with the debug key and permits Google's test ad units. The output is
+deliberately not shippable — Play rejects debug-signed uploads and test ads earn nothing.
+Without the flag, a release build **fails** rather than silently shipping test ads.
+
+#### Still to do in Phase 6 — needs your accounts
+
+- **Crash reporting.** Play Console's Android Vitals covers the 99.5% crash-free target
+  with no setup once published, which is the plan's own fallback. Firebase Crashlytics
+  gives better stack traces but needs a Firebase project and a `google-services.json`
+  that cannot be committed, so it is left for you to add.
+- **Analytics.** Same constraint. The plan wants only D1/D7 retention, puzzles started
+  vs completed, hint usage, ad impressions and IAP conversion — nothing more, and
+  whatever is added has to match the Data Safety form filed in Phase 8.
 
 ### Board rendering performance
 

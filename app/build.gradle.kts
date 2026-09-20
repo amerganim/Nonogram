@@ -23,6 +23,20 @@ fun adProperty(name: String): String? = (localProperties.getProperty(name) ?: pr
     ?.trim()
     ?.takeIf { it.isNotEmpty() }
 
+/**
+ * Local-only escape hatch for exercising the minified release build.
+ *
+ * Build plan section 9 requires verifying that the R8 output actually runs, and warns
+ * that "R8 breakage that only appears in release builds is a classic late-stage
+ * disaster". Doing that check needs a release build, which otherwise needs a signing key
+ * and real AdMob identifiers that no fresh clone has.
+ *
+ * `-PlocalReleaseCheck=true` signs with the debug key and permits Google's test ad units,
+ * so R8 can be exercised on a device. The result is deliberately not shippable: Play
+ * rejects debug-signed uploads, and test ads earn nothing.
+ */
+val localReleaseCheck = providers.gradleProperty("localReleaseCheck").orNull == "true"
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
@@ -60,6 +74,12 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+
+            // Signed with the debug key only for a local R8 check; a real release is
+            // signed by Play App Signing from the upload key (build plan 11.3).
+            if (localReleaseCheck) {
+                signingConfig = signingConfigs.getByName("debug")
+            }
 
             // Real units come from local.properties, which is gitignored. A release
             // built without them would silently ship test ads and earn nothing, so it
@@ -167,13 +187,22 @@ val verifyReleaseAdUnits = tasks.register("verifyReleaseAdUnits") {
     val appId = adProperty("admob.appId")
     val interstitial = adProperty("admob.unit.interstitial")
     val rewarded = adProperty("admob.unit.rewarded")
+    // Captured as plain values. Referring to anything defined in the build script from
+    // inside a task action makes the task unserialisable for the configuration cache.
+    val allowTestAds = localReleaseCheck
     doLast {
+        if (allowTestAds) {
+            logger.lifecycle(
+                "localReleaseCheck: this release uses Google's TEST ad units and the " +
+                    "debug signing key. It is for checking R8 output only - do not upload it.",
+            )
+        }
         val missing = buildList {
             if (appId == null) add("admob.appId")
             if (interstitial == null) add("admob.unit.interstitial")
             if (rewarded == null) add("admob.unit.rewarded")
         }
-        if (missing.isNotEmpty()) {
+        if (missing.isNotEmpty() && !allowTestAds) {
             throw GradleException(
                 listOf(
                     "Release build is missing real AdMob identifiers: ${missing.joinToString(", ")}",
