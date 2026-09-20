@@ -17,10 +17,10 @@ Built against `nonogram-app-build-plan.md`. Phases run in order; see **Status** 
 | 4 | Visual design and theming | **Built**, verified on device |
 | 5 | Monetization | **Built**, policy tested; SDK paths need Play test tracks |
 | 6 | Hardening | **Built**, verified on device — crash reporting is a human step |
-| 7 | Store assets | Not started |
+| 7 | Store assets | **Complete** — see `store/` |
 | 8 | Publishing (human-operated) | **Start now, in parallel** — see below |
 
-**213 tests, 0 failures**, running in about 6 seconds.
+**247 tests, 0 failures**, running in about 6 seconds.
 
 ### Phase 4 acceptance criteria
 
@@ -49,6 +49,21 @@ Animation durations live in `Motion` so reduce-motion applies in one place.
       **476 frames, 1 janky (0.21%), p50 12 ms** over sustained flinging
 - [x] Progress survives app kill — confirmed on device. *App update* is still untested
       in the sense that matters: there is only a v1 schema, so no migration exists yet.
+
+### Phase 7 — store assets
+
+Everything §10 asks for is in `store/`, with `store/README.md` explaining how to
+regenerate it and what is still yours to do before upload.
+
+- App icon (512×512) and launcher icons at every density, including the Android 13+
+  themed layer. **The app previously had no launcher icon at all** and was shipping with
+  the system default.
+- Feature graphic (1024×500)
+- Six phone screenshots, captured from a real device rather than mocked: puzzles were
+  solved over adb by reading the solution out of the bundled pack and drag-painting each
+  run
+- App name, short and full description (`store/listing.md`)
+- Privacy policy (`store/privacy-policy.html`) — needs a contact email before it goes up
 
 ### Phase 6 acceptance criteria
 

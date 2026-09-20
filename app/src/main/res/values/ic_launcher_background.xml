@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches PaperLight in ui/theme/Color.kt. The launcher icon is paper and ink,
+         the same as the app itself. -->
+    <color name="ic_launcher_background">#FAF9F7</color>
+</resources>

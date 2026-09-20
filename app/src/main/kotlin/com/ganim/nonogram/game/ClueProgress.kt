@@ -33,6 +33,15 @@ object ClueProgress {
         val values = clue.values
         if (values.isEmpty()) return emptyList()
 
+        // If what is already filled spells out the clue exactly, every group is
+        // accounted for, whatever the player has or has not crossed.
+        //
+        // Without this a line that is completely and correctly filled keeps its clue
+        // lit, because the edge-scanning below needs each run closed by a known-empty
+        // cell. Plenty of players never cross at all, so they would finish a row and get
+        // no acknowledgement of it - which is exactly what it looked like on a device.
+        if (filledRunsMatch(values, length, cellAt)) return List(values.size) { true }
+
         val done = BooleanArray(values.size)
         val matchedFromLeft = scan(values, length, cellAt, done, fromLeft = true)
 
@@ -41,6 +50,31 @@ object ClueProgress {
         scan(values, length, cellAt, done, fromLeft = false, stopAtIndex = matchedFromLeft)
 
         return done.toList()
+    }
+
+    /**
+     * True when the filled cells already form exactly this clue.
+     *
+     * Certain, not generous: if the runs of filled cells match the clue run for run,
+     * nothing further can be added without breaking it, so every group is placed.
+     */
+    private fun filledRunsMatch(values: List<Int>, length: Int, cellAt: (Int) -> CellState): Boolean {
+        var group = 0
+        var run = 0
+        for (i in 0 until length) {
+            if (cellAt(i) == CellState.FILLED) {
+                run++
+            } else if (run > 0) {
+                if (group >= values.size || values[group] != run) return false
+                group++
+                run = 0
+            }
+        }
+        if (run > 0) {
+            if (group >= values.size || values[group] != run) return false
+            group++
+        }
+        return group == values.size
     }
 
     /** True when every group in the clue is satisfied. */

@@ -105,9 +105,23 @@ class InputAndLayoutTest {
         }
 
         @Test
-        fun `a run still touching unknown cells proves nothing`() {
-            ClueProgress.satisfied(Clue.of(3), listOf(FILLED, FILLED, FILLED, UNKNOWN, UNKNOWN)) shouldBe
+        @DisplayName("an unfinished run proves nothing, even though it could grow into the clue")
+        fun `an unfinished run proves nothing`() {
+            // Two of a three-run. Filling one more cell would satisfy it, so nothing is
+            // settled yet.
+            ClueProgress.satisfied(Clue.of(3), listOf(FILLED, FILLED, UNKNOWN, UNKNOWN, UNKNOWN)) shouldBe
                 listOf(false)
+        }
+
+        @Test
+        @DisplayName("a complete run counts even with unknowns beside it")
+        fun `a complete run beside unknowns is satisfied`() {
+            // This used to assert the opposite. A run of exactly three against a clue of
+            // three cannot be extended without breaking that clue, so the group is
+            // placed - and refusing to say so meant a player who never crosses got no
+            // feedback at all, which is how it looked on a device.
+            ClueProgress.satisfied(Clue.of(3), listOf(FILLED, FILLED, FILLED, UNKNOWN, UNKNOWN)) shouldBe
+                listOf(true)
         }
 
         @Test
@@ -142,6 +156,30 @@ class InputAndLayoutTest {
             val withCross = ClueProgress.satisfied(Clue.of(2), listOf(FILLED, FILLED, CROSSED))
             val withEmpty = ClueProgress.satisfied(Clue.of(2), listOf(FILLED, FILLED, EMPTY))
             withCross shouldBe withEmpty
+        }
+
+        @Test
+        @DisplayName("a correctly filled line greys its clue even with nothing crossed")
+        fun `a complete line without crosses is satisfied`() {
+            // Seen on a device: rows filled correctly but never crossed kept their clues
+            // lit, so finishing a row gave no feedback at all.
+            ClueProgress.satisfied(Clue.of(2), listOf(FILLED, FILLED, UNKNOWN, UNKNOWN)) shouldBe
+                listOf(true)
+            ClueProgress.satisfied(
+                Clue.of(1, 2),
+                listOf(FILLED, UNKNOWN, FILLED, FILLED, UNKNOWN),
+            ) shouldBe listOf(true, true)
+        }
+
+        @Test
+        fun `a partially filled line is still not satisfied`() {
+            // One filled cell of a two-cell run must not grey the clue.
+            ClueProgress.satisfied(Clue.of(2), listOf(FILLED, UNKNOWN, UNKNOWN)) shouldBe listOf(false)
+            // Too many runs for the clue.
+            ClueProgress.satisfied(
+                Clue.of(2),
+                listOf(FILLED, FILLED, UNKNOWN, FILLED, UNKNOWN),
+            ) shouldBe listOf(false)
         }
 
         @Test
