@@ -207,6 +207,7 @@ fun NonogramApp(container: AppContainer) {
                     SettingsScreen(
                         settings = settings,
                         completedCount = completedCount,
+                        totalCount = container.puzzles.count + container.puzzles.pictureCount,
                         onHapticsChanged = { enabled ->
                             scope.launch { container.settings.setHapticsEnabled(enabled) }
                         },

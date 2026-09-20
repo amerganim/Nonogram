@@ -34,6 +34,7 @@ import com.ganim.nonogram.ui.theme.LocalBoardColors
 fun SettingsScreen(
     settings: Settings,
     completedCount: Int,
+    totalCount: Int,
     onHapticsChanged: (Boolean) -> Unit,
     onThemeChanged: (Boolean?) -> Unit,
     onHowToPlay: () -> Unit,
@@ -104,7 +105,9 @@ fun SettingsScreen(
             Column(Modifier.padding(16.dp)) {
                 Text("Puzzles solved", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "$completedCount of 5,000",
+                    // Counted, not hard-coded: the total is the generated pack plus the
+                    // hand-drawn pictures, and it moves whenever either pack is rebuilt.
+                    "%,d of %,d".format(completedCount, totalCount),
                     style = MaterialTheme.typography.labelLarge,
                     color = colors.textMuted,
                 )

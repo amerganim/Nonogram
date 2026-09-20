@@ -92,7 +92,10 @@ private fun StreakBanner(state: DailyUiState) {
     ) {
         StatTile("Streak", state.currentStreak.toString(), Modifier.weight(1f))
         StatTile("Best", state.bestStreak.toString(), Modifier.weight(1f))
-        StatTile("Solved", state.totalCompleted.toString(), Modifier.weight(1f))
+        // "Dailies", not "Solved": this counter only moves for the daily puzzle, and
+        // a player who has just solved three from the archive would read "Solved 0" as
+        // the app having lost their work. The all-puzzle total is in Settings.
+        StatTile("Dailies", state.totalCompleted.toString(), Modifier.weight(1f))
     }
     if (state.freezeProtecting) {
         // Say it out loud rather than silently spending the freeze - a streak that
