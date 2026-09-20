@@ -40,6 +40,9 @@ data class DailyUiState(
     val freezeProtecting: Boolean = false,
     val freezeAvailable: Boolean = true,
     val month: YearMonth = YearMonth.now(),
+    /** How many of the hand-drawn pictures have been revealed, and how many exist. */
+    val picturesRevealed: Int = 0,
+    val pictureCount: Int = 0,
     val days: List<CalendarDay> = emptyList(),
 )
 
@@ -75,7 +78,8 @@ class DailyViewModel(
                 progress.observeInProgressIds(),
                 month.flatMapLatest { progress.observeMonth(it) },
                 month,
-            ) { stats, inProgress, records, shownMonth ->
+                progress.observeCompletedIds(),
+            ) { stats, inProgress, records, shownMonth, completed ->
                 val today = clock.today()
                 val spec = DailySchedule.specFor(today)
                 val todayId = puzzles.dailyIdFor(today)
@@ -94,6 +98,10 @@ class DailyViewModel(
                     freezeAvailable = StreakCalculator.freezeAvailableOn(stats, today),
                     month = shownMonth,
                     days = buildCalendar(shownMonth, today, records, inProgress),
+                    // Twenty-three ids against a set: cheap enough to recompute rather
+                    // than cache, and it cannot go stale this way.
+                    picturesRevealed = puzzles.pictures.count { it.id in completed },
+                    pictureCount = puzzles.pictureCount,
                 )
             }.collect { _state.value = it }
         }

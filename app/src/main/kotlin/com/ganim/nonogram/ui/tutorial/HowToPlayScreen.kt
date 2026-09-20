@@ -5,6 +5,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,11 +20,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import com.ganim.nonogram.ui.components.GhostButton
+import com.ganim.nonogram.ui.components.Glyph
+import com.ganim.nonogram.ui.components.PrimaryButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -54,6 +55,8 @@ import androidx.compose.ui.unit.dp
 import com.ganim.nonogram.puzzle.tutorial.TutorialLesson
 import com.ganim.nonogram.ui.theme.BoardColors
 import com.ganim.nonogram.ui.theme.LocalBoardColors
+import com.ganim.nonogram.ui.theme.LocalReduceMotion
+import com.ganim.nonogram.ui.theme.Motion
 import kotlinx.coroutines.delay
 
 /**
@@ -93,10 +96,14 @@ fun HowToPlayScreen(
 
     // Each step's new marks fade and scale in, so the eye is pulled to what just
     // changed rather than having to diff two static boards.
+    val reduceMotion = LocalReduceMotion.current
     val reveal = remember { Animatable(0f) }
-    LaunchedEffect(stepIndex) {
+    LaunchedEffect(stepIndex, reduceMotion) {
         reveal.snapTo(0f)
-        reveal.animateTo(1f, tween(durationMillis = 420, easing = LinearEasing))
+        reveal.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(Motion.duration(Motion.MAXIMUM, reduceMotion), easing = LinearEasing),
+        )
     }
 
     LaunchedEffect(stepIndex, playing) {
@@ -193,10 +200,11 @@ fun HowToPlayScreen(
             Bullet("A new puzzle arrives daily. The archive holds the rest, none of it locked.", colors)
         }
 
-        Button(
+        PrimaryButton(
+            text = doneLabel,
             onClick = onDone,
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-        ) { Text(doneLabel) }
+        )
     }
 }
 
@@ -215,7 +223,7 @@ private fun StepControls(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TextButton(onClick = onBack, enabled = stepIndex > 0) { Text("Back") }
+        GhostButton("Back", onBack, enabled = stepIndex > 0, glyph = Glyph.BACK)
 
         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             repeat(lastStep + 1) { index ->
@@ -229,9 +237,14 @@ private fun StepControls(
         }
 
         if (stepIndex >= lastStep) {
-            OutlinedButton(onClick = onReplay) { Text("Replay") }
+            GhostButton("Replay", onReplay, glyph = Glyph.UNDO, tint = colors.info)
         } else {
-            TextButton(onClick = onPlayPause) { Text(if (playing) "Pause" else "Play") }
+            GhostButton(
+                text = if (playing) "Pause" else "Play",
+                onClick = onPlayPause,
+                glyph = if (playing) Glyph.SQUARE else Glyph.PLAY,
+                tint = colors.info,
+            )
         }
     }
 }
@@ -370,7 +383,7 @@ private fun DrawScope.drawMark(
 ) {
     when (mark) {
         TutorialLesson.Mark.FILL -> drawRoundRect(
-            color = colors.cellFilled,
+            color = colors.accent,
             topLeft = Offset(at.x + cell * 0.06f, at.y + cell * 0.06f),
             size = Size(cell * 0.88f, cell * 0.88f),
             cornerRadius = CornerRadius(cell * 0.14f),
@@ -404,9 +417,10 @@ private fun Section(title: String, colors: BoardColors, content: @Composable () 
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(22.dp))
             .background(colors.surface)
-            .padding(14.dp),
+            .border(1.dp, colors.stroke, RoundedCornerShape(22.dp))
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(

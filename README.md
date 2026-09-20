@@ -21,7 +21,7 @@ Built against `nonogram-app-build-plan.md`. Phases run in order; see **Status** 
 | 8 | Publishing (human-operated) | **Start now, in parallel** — see below |
 | — | Onboarding and picture puzzles | **Built**, verified on device — see below |
 
-**259 tests, 0 failures**, running in about 7 seconds.
+**285 tests, 0 failures**, running in about 7 seconds.
 
 ### Phase 4 acceptance criteria
 
@@ -29,7 +29,7 @@ Built against `nonogram-app-build-plan.md`. Phases run in order; see **Status** 
       theme — enforced by `ThemePurityTest`, which fails the build on a stray
       `Color(0xFF…)` or a `tween(240)` that would dodge the reduce-motion setting
 - [x] Contrast ratios meet WCAG AA — `ThemeContrastTest` computes WCAG 2.1 relative
-      luminance for all 13 colour pairs in both themes, flattening translucent
+      luminance for all 26 colour pairs in both themes, flattening translucent
       foregrounds first so the ratio reflects what is actually on screen
 - [x] Usable at 200% system font scale — confirmed on device. Fixing this found a real
       defect: at 2× the "Undo" label wrapped inside its own button, so the control row
@@ -50,6 +50,22 @@ Animation durations live in `Motion` so reduce-motion applies in one place.
       **476 frames, 1 janky (0.21%), p50 12 ms** over sustained flinging
 - [x] Progress survives app kill — confirmed on device. *App update* is still untested
       in the sense that matters: there is only a v1 schema, so no migration exists yet.
+
+### Beyond the plan — the visual direction changed
+
+§7 asked for "a well-made physical puzzle book, not a casual game", and phases 1–4 built
+exactly that: paper, ink, one teal accent. Correct, and quiet. The brief then changed —
+this should feel like a game — so the palette and controls were rebuilt as **Arcade
+Night**: deep indigo, chunky bevelled keys, and **one colour per meaning** (gold acts,
+coral costs you something, mint confirms, sky explains, violet is the picture
+collection).
+
+The board is the exception and stays disciplined: two colours inside the grid and a muted
+cross. A nonogram is read, not just looked at, and a tinted square competes with the clue
+beside it. The colour is spent on the frame, not the picture.
+
+Full rationale, the contrast arithmetic a saturated palette forces, and what was
+deliberately left flat for performance: `docs/design-language.md`.
 
 ### Beyond the plan — teaching the game, and giving it a payoff
 
@@ -260,6 +276,7 @@ app/src/main/kotlin/com/ganim/nonogram/
 │   ├── BoardGestures# tap / drag / long-press / pinch
 │   └── GameViewModel
 ├── ui/              # Navigation, settings screen, AppContainer
+│   ├── components/  # Buttons, panels, chips, meters, the drawn icon set
 │   ├── theme/       # The only place a colour literal may appear
 │   └── tutorial/    # How to play - the animated walkthrough
 └── MainActivity.kt

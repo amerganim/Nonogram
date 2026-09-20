@@ -4,8 +4,9 @@ import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.height
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.background
@@ -22,14 +23,11 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -45,12 +43,16 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
+import com.ganim.nonogram.ui.components.Capsule
+import com.ganim.nonogram.ui.components.GameIcon
+import com.ganim.nonogram.ui.components.GhostButton
+import com.ganim.nonogram.ui.components.Glyph
+import com.ganim.nonogram.ui.components.PrimaryButton
+import com.ganim.nonogram.ui.components.ScoreRow
 import com.ganim.nonogram.ui.theme.LocalBoardColors
 import com.ganim.nonogram.ui.theme.LocalReduceMotion
 import com.ganim.nonogram.ui.theme.Motion
@@ -274,60 +276,65 @@ private fun GameToolbar(
 ) {
     val colors = LocalBoardColors.current
     Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onExit) { Text("‹ Back") }
-            Spacer(Modifier.width(4.dp))
-            Text(
-                text = formatTime(elapsedSeconds),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-            )
-            Spacer(Modifier.width(12.dp))
-            LivesIndicator(
-                remaining = livesRemaining,
-                total = GameState.MAX_LIVES,
-            )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Box(
+                Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(15.dp))
+                    .background(colors.surface)
+                    .border(1.dp, colors.stroke, RoundedCornerShape(15.dp))
+                    .clickable(onClick = onExit),
+                contentAlignment = Alignment.Center,
+            ) {
+                GameIcon(Glyph.BACK, colors.clueText, size = 19.dp, contentDescription = "Back")
+            }
+
+            Capsule(Glyph.CLOCK, formatTime(elapsedSeconds), colors.textMuted)
+
             Spacer(Modifier.weight(1f))
-            Text(
-                text = "${sizeLabel}x$sizeLabel $difficultyLabel",
-                style = MaterialTheme.typography.labelLarge,
-                color = colors.textMuted,
-                // At 200% font scale this label would otherwise shove the timer and the
-                // lives off the screen. It is the least important thing in the row, so
-                // it is the one that gives way.
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-                textAlign = TextAlign.End,
-            )
+
+            LivesIndicator(remaining = livesRemaining, total = GameState.MAX_LIVES)
         }
 
-        Spacer(Modifier.size(8.dp))
+        Spacer(Modifier.size(10.dp))
 
-        // At large accessibility font scales three buttons no longer fit across the
-        // screen, and squeezing them breaks "Undo" onto two lines inside its own button.
-        // Past 1.5x they get a row each instead. Section 7 requires the app stay usable
-        // at 200%, and usable means the controls still read as controls.
+        // At large accessibility font scales four buttons no longer fit across the
+        // screen, and squeezing them breaks a label onto two lines inside its own
+        // button. Past 1.5x they get a row each instead. Section 7 requires the app stay
+        // usable at 200%, and usable means the controls still read as controls.
         val stacked = LocalDensity.current.fontScale >= STACK_CONTROLS_FONT_SCALE
 
         val modeButton: @Composable (Modifier) -> Unit = { mod ->
-            // The mode toggle is the most-used control, so it leads and takes most room.
-            FilledTonalButton(onClick = onToggleMode, modifier = mod) {
-                Text(if (paintMode == PaintMode.FILL) "Fill" else "Cross", maxLines = 1)
-            }
+            // The mode toggle is the most-used control, so it leads, takes most room,
+            // and is the only one wearing the accent: at a glance you can tell what a
+            // tap is about to write.
+            val filling = paintMode == PaintMode.FILL
+            ToolButton(
+                label = if (filling) "Fill" else "Cross",
+                glyph = if (filling) Glyph.SQUARE else Glyph.CROSS,
+                onClick = onToggleMode,
+                enabled = isPlayable,
+                active = true,
+                modifier = mod,
+            )
         }
         val undoButton: @Composable (Modifier) -> Unit = { mod ->
-            OutlinedButton(onClick = onUndo, enabled = canUndo, modifier = mod) {
-                Text("Undo", maxLines = 1)
-            }
+            ToolButton("Undo", Glyph.UNDO, onUndo, enabled = canUndo, modifier = mod)
         }
         val hintButton: @Composable (Modifier) -> Unit = { mod ->
-            OutlinedButton(onClick = onHint, enabled = isPlayable && !hintBusy, modifier = mod) {
+            ToolButton(
+                label = "Hint",
+                glyph = Glyph.SPARK,
+                onClick = onHint,
+                enabled = isPlayable && !hintBusy,
                 // Showing the count makes the free-hint economy legible instead of the
                 // button silently turning into an ad prompt.
-                Text(if (hintsRemaining > 0) "Hint $hintsRemaining" else "Hint", maxLines = 1)
-            }
+                badge = hintsRemaining.takeIf { it > 0 }?.toString(),
+                modifier = mod,
+            )
         }
 
         if (stacked) {
@@ -346,81 +353,148 @@ private fun GameToolbar(
             }
         } else {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                modeButton(Modifier.weight(1.4f))
+                modeButton(Modifier.weight(1.3f))
                 undoButton(Modifier.weight(1f))
                 hintButton(Modifier.weight(1f))
             }
         }
-
     }
 }
 
 /**
- * The three lives, drawn rather than typed.
+ * One control in the play toolbar.
+ *
+ * [active] wears the accent; everything else is a quiet outlined key. Only one control
+ * may be active at a time, which is what lets the toolbar answer "what will a tap do?"
+ * without being read.
+ */
+@Composable
+private fun ToolButton(
+    label: String,
+    glyph: Glyph,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    active: Boolean = false,
+    badge: String? = null,
+) {
+    val colors = LocalBoardColors.current
+    val shape = RoundedCornerShape(16.dp)
+    val face = when {
+        !enabled -> colors.surface
+        active -> colors.accent
+        else -> colors.surface
+    }
+    val content = when {
+        !enabled -> colors.stroke
+        active -> colors.onAccent
+        else -> colors.clueText
+    }
+    Row(
+        modifier
+            .height(48.dp)
+            .clip(shape)
+            .background(face)
+            .then(if (active) Modifier else Modifier.border(1.dp, colors.stroke, shape))
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        GameIcon(glyph, content, size = 18.dp)
+        Text(label, style = MaterialTheme.typography.labelLarge, color = content, maxLines = 1)
+        if (badge != null) {
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(colors.success)
+                    .padding(horizontal = 6.dp, vertical = 1.dp),
+            ) {
+                Text(badge, style = MaterialTheme.typography.labelMedium, color = colors.onAccent)
+            }
+        }
+    }
+}
+
+/**
+ * The three lives.
  *
  * A heart character renders as a colour emoji on most Android builds, which is loud,
- * ignores the theme entirely, and reads as a casual game - the exact look section 7
- * tells us to avoid. Two circles do the job and inherit the palette.
+ * ignores the theme entirely and looks nothing like the rest of the app. This is the
+ * same path the icon set uses, so it inherits the palette.
+ *
+ * A spent life keeps its outline rather than vanishing: "one left" and "one of three
+ * left" are different pieces of information, and only the second says how much trouble
+ * you are in.
  */
 @Composable
 private fun LivesIndicator(remaining: Int, total: Int) {
     val colors = LocalBoardColors.current
-    val spent = colors.textMuted
-    val alive = if (remaining <= 1) MaterialTheme.colorScheme.error else colors.accent
-
-    Canvas(
-        Modifier
-            .height(20.dp)
-            .width((total * 18).dp)
-            .semantics { contentDescription = "$remaining of $total lives remaining" },
+    Row(
+        Modifier.semantics { contentDescription = "$remaining of $total lives remaining" },
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        val radius = size.height / 2.6f
-        val step = size.width / total
         repeat(total) { index ->
-            val centre = Offset(step * index + step / 2f, size.height / 2f)
-            if (index < remaining) {
-                drawCircle(alive, radius, centre)
-            } else {
-                drawCircle(spent, radius, centre, style = Stroke(width = radius * 0.36f))
-            }
+            GameIcon(
+                glyph = Glyph.HEART,
+                tint = if (index < remaining) colors.cellMistake else colors.stroke,
+                size = 21.dp,
+            )
         }
     }
 }
 
 @Composable
 private fun ResultsCard(state: GameChrome, onNext: () -> Unit, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+    val colors = LocalBoardColors.current
+    val shape = RoundedCornerShape(28.dp)
+    Column(
+        modifier
+            .clip(shape)
+            .background(colors.raised)
+            .border(1.dp, colors.stroke, shape)
+            .padding(horizontal = 24.dp, vertical = 22.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Column(
-            Modifier.padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            // The card sits over the board, so it shows the finished picture itself -
-            // without the grid lines, clue gutters and half-drawn crosses that were
-            // scaffolding for solving it and are clutter now that it is solved.
-            SolvedPicture(state)
+        // The card sits over the board, so it shows the finished picture itself -
+        // without the grid lines, clue gutters and half-drawn crosses that were
+        // scaffolding for solving it and are clutter now that it is solved.
+        SolvedPicture(state)
 
-            // For a hand-drawn picture, the name is the payoff - the moment the grid
-            // you just filled turns out to be a thing. It leads, and the stats follow.
-            if (state.pictureName.isNotEmpty()) {
-                Text("You drew", style = MaterialTheme.typography.labelLarge)
-                Text(state.pictureName, style = MaterialTheme.typography.headlineSmall)
-            } else {
-                Text("Solved", style = MaterialTheme.typography.titleMedium)
+        // For a hand-drawn picture, the name is the payoff - the moment the grid you
+        // just filled turns out to be a thing. It leads, and the stats follow.
+        if (state.pictureName.isNotEmpty()) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    "YOU DREW",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.textMuted,
+                )
+                Text(
+                    state.pictureName,
+                    style = MaterialTheme.typography.displaySmall,
+                    color = colors.clueText,
+                    textAlign = TextAlign.Center,
+                )
             }
-            Text(formatTime(state.elapsedSeconds), style = MaterialTheme.typography.titleMedium)
-            Text(
-                "${state.mistakes} mistakes  ·  ${state.difficultyLabel}",
-                style = MaterialTheme.typography.labelLarge,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(Modifier.size(4.dp))
-            Button(onClick = onNext) { Text("Done") }
+        } else {
+            Text("Solved", style = MaterialTheme.typography.headlineSmall, color = colors.clueText)
         }
+
+        ScoreRow(
+            listOf(
+                Triple("Time", formatTime(state.elapsedSeconds), colors.clueText),
+                Triple(
+                    "Mistakes",
+                    state.mistakes.toString(),
+                    if (state.mistakes == 0) colors.success else colors.cellMistake,
+                ),
+                Triple("Level", state.difficultyLabel, colors.info),
+            ),
+        )
+
+        PrimaryButton("Done", onNext, Modifier.fillMaxWidth(), glyph = Glyph.CHECK)
     }
 }
 
@@ -461,22 +535,39 @@ private fun OutOfLivesCard(
     onRestart: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+    val colors = LocalBoardColors.current
+    val shape = RoundedCornerShape(28.dp)
+    Column(
+        modifier
+            .clip(shape)
+            .background(colors.raised)
+            .border(1.dp, colors.stroke, shape)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(13.dp),
     ) {
-        Column(
-            Modifier.padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text("Out of lives", style = MaterialTheme.typography.titleMedium)
-            // Phase 5 puts a rewarded ad behind this. Until then it simply grants the
-            // life, which is also the no-fill fallback the plan requires (8.2).
-            Button(onClick = onRestoreLife) { Text("Restore a life") }
-            OutlinedButton(onClick = onRestart) { Text("Start over") }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            repeat(GameState.MAX_LIVES) { GameIcon(Glyph.HEART, colors.stroke, size = 26.dp) }
         }
+        Text("Out of lives", style = MaterialTheme.typography.headlineSmall, color = colors.clueText)
+        Text(
+            "Every square you got right is still there.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.textMuted,
+            textAlign = TextAlign.Center,
+        )
+        // Phase 5 puts a rewarded ad behind this. It grants the life either way, which
+        // is also the no-fill fallback the plan requires (8.2).
+        PrimaryButton(
+            text = "Restore a life",
+            onClick = onRestoreLife,
+            modifier = Modifier.fillMaxWidth(),
+            glyph = Glyph.HEART,
+            face = colors.cellMistake,
+            bevel = colors.stroke,
+            onFace = colors.onAccent,
+        )
+        GhostButton("Start over", onRestart, Modifier.fillMaxWidth(), glyph = Glyph.UNDO)
     }
 }
 

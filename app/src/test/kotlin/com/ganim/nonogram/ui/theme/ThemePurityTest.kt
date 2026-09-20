@@ -97,7 +97,13 @@ class ThemePurityTest {
             """Color\(\s*0x[0-9A-Fa-f]{6,8}|Color\.(?!Transparent|Unspecified)[A-Z]\w+""",
         )
 
-        /** `tween(240)` in a screen dodges the reduce-motion setting. */
-        val TWEEN_LITERAL = Regex("""tween\(\s*\d+""")
+        /**
+         * `tween(240)` in a screen dodges the reduce-motion setting.
+         *
+         * The named-argument form is matched too: `tween(durationMillis = 420)` slipped
+         * past the first version of this check and shipped, which is exactly the kind of
+         * thing a lint rule exists to stop.
+         */
+        val TWEEN_LITERAL = Regex("""tween\(\s*(durationMillis\s*=\s*)?\d+""")
     }
 }

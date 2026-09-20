@@ -1,6 +1,7 @@
 package com.ganim.nonogram.daily
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,14 +15,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -32,6 +28,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ganim.nonogram.puzzle.model.Difficulty
+import com.ganim.nonogram.ui.components.Capsule
+import com.ganim.nonogram.ui.components.Chip
+import com.ganim.nonogram.ui.components.GameIcon
+import com.ganim.nonogram.ui.components.Glyph
+import com.ganim.nonogram.ui.components.Meter
+import com.ganim.nonogram.ui.components.Panel
+import com.ganim.nonogram.ui.components.PrimaryButton
+import com.ganim.nonogram.ui.components.StatTile
 import com.ganim.nonogram.ui.theme.LocalBoardColors
 import java.time.LocalDate
 import java.time.format.TextStyle
@@ -43,11 +48,16 @@ import java.util.Locale
  * Today's puzzle, the streak, then the month. In that order because it is the order of
  * importance: the streak is the reason to come back, and burying it below a calendar
  * would waste the one mechanic that actually drives retention.
+ *
+ * The streak lives in the header rather than in a tile of its own, because it is the one
+ * number a returning player looks for before anything else - and a number you look for
+ * first should not be the third thing down the page.
  */
 @Composable
 fun DailyScreen(
     viewModel: DailyViewModel,
     onPlay: (puzzleId: String, date: LocalDate) -> Unit,
+    onOpenPictures: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -58,15 +68,26 @@ fun DailyScreen(
             .fillMaxSize()
             .background(colors.boardBackground)
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        StreakBanner(state)
+        Header(state)
 
         TodayCard(
             state = state,
             onPlay = { state.puzzleId?.let { onPlay(it, state.today) } },
         )
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            StatTile("Streak", state.currentStreak.toString(), Glyph.FLAME, colors.cellMistake, Modifier.weight(1f))
+            StatTile("Best", state.bestStreak.toString(), Glyph.TROPHY, colors.accent, Modifier.weight(1f))
+            // "Dailies", not "Solved": this counter only moves for the daily puzzle, and
+            // a player who has just solved three from the archive would read "Solved 0"
+            // as the app having lost their work. The all-puzzle total is in Settings.
+            StatTile("Dailies", state.totalCompleted.toString(), Glyph.CHECK, colors.success, Modifier.weight(1f))
+        }
+
+        if (state.pictureCount > 0) PicturesCard(state, onOpenPictures)
 
         MonthView(
             state = state,
@@ -84,73 +105,135 @@ fun DailyScreen(
 }
 
 @Composable
-private fun StreakBanner(state: DailyUiState) {
+private fun Header(state: DailyUiState) {
     val colors = LocalBoardColors.current
     Row(
         Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        StatTile("Streak", state.currentStreak.toString(), Modifier.weight(1f))
-        StatTile("Best", state.bestStreak.toString(), Modifier.weight(1f))
-        // "Dailies", not "Solved": this counter only moves for the daily puzzle, and
-        // a player who has just solved three from the archive would read "Solved 0" as
-        // the app having lost their work. The all-puzzle total is in Settings.
-        StatTile("Dailies", state.totalCompleted.toString(), Modifier.weight(1f))
-    }
-    if (state.freezeProtecting) {
-        // Say it out loud rather than silently spending the freeze - a streak that
-        // survived a missed day without explanation just looks like a bug.
-        Text(
-            text = "A streak freeze is holding your streak. Play today to keep it.",
-            style = MaterialTheme.typography.labelLarge,
-            color = colors.accent,
+        Column {
+            Text(
+                state.today.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault()).uppercase(),
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.textMuted,
+            )
+            Text(
+                "${state.today.dayOfMonth} " +
+                    state.today.month.getDisplayName(TextStyle.FULL, Locale.getDefault()),
+                style = MaterialTheme.typography.headlineSmall,
+                color = colors.clueText,
+            )
+        }
+        Capsule(
+            glyph = Glyph.FLAME,
+            text = state.currentStreak.toString(),
+            tint = colors.cellMistake,
+            washed = true,
         )
     }
 }
 
+/**
+ * The one thing this screen is for.
+ *
+ * Everything below it is context; this is the action. So it gets the raised surface, the
+ * chips that say what you are walking into, and the only bevelled button on the screen.
+ */
 @Composable
-private fun StatTile(label: String, value: String, modifier: Modifier = Modifier) {
+private fun TodayCard(state: DailyUiState, onPlay: () -> Unit) {
     val colors = LocalBoardColors.current
-    Card(modifier, shape = RoundedCornerShape(16.dp)) {
-        Column(
-            Modifier.fillMaxWidth().padding(vertical = 14.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+    Panel(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Text(label, style = MaterialTheme.typography.labelLarge, color = colors.textMuted)
+            Chip("TODAY", colors.accent, solid = true)
+            Chip("${state.size} × ${state.size}", colors.info)
+            Chip(state.difficulty.name.lowercase(), difficultyTint(state.difficulty))
+        }
+
+        Spacer(Modifier.size(12.dp))
+
+        Text(
+            when {
+                state.todayCompleted -> "Solved today"
+                state.todayStarted -> "Still going"
+                else -> "Daily puzzle"
+            },
+            style = MaterialTheme.typography.headlineSmall,
+            color = colors.clueText,
+        )
+
+        Spacer(Modifier.size(4.dp))
+
+        Text(
+            if (state.todayCompleted) {
+                "Come back tomorrow, or play it again."
+            } else {
+                "Three lives. No guessing required."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.textMuted,
+        )
+
+        Spacer(Modifier.size(16.dp))
+
+        PrimaryButton(
+            text = when {
+                state.todayCompleted -> "Play again"
+                state.todayStarted -> "Continue"
+                else -> "Play"
+            },
+            onClick = onPlay,
+            enabled = state.puzzleId != null,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        if (state.freezeProtecting) {
+            Spacer(Modifier.size(12.dp))
+            // Say it out loud rather than silently spending the freeze - a streak that
+            // survived a missed day without explanation just looks like a bug.
+            Text(
+                "A streak freeze is holding your streak. Play today to keep it.",
+                style = MaterialTheme.typography.labelLarge,
+                color = colors.cellMistake,
+            )
         }
     }
 }
 
+/**
+ * The picture collection, surfaced where someone will see it.
+ *
+ * Buried behind an archive tab it would go unfound, and a collection nobody knows about
+ * pulls nobody back.
+ */
 @Composable
-private fun TodayCard(state: DailyUiState, onPlay: () -> Unit) {
+private fun PicturesCard(state: DailyUiState, onOpen: () -> Unit) {
     val colors = LocalBoardColors.current
-    Card(
-        Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-    ) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                state.today.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault()),
-                style = MaterialTheme.typography.labelLarge,
-                color = colors.textMuted,
-            )
-            Text(
-                "${state.size}x${state.size}  ·  ${state.difficulty.name.lowercase()}",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Button(onClick = onPlay, enabled = state.puzzleId != null) {
+    Panel(Modifier.fillMaxWidth(), tint = colors.collection, onClick = onOpen) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            GameIcon(Glyph.IMAGE, colors.collection, size = 22.dp)
+            Column(Modifier.weight(1f)) {
+                Text("Pictures", style = MaterialTheme.typography.titleMedium, color = colors.clueText)
                 Text(
-                    when {
-                        state.todayCompleted -> "Play again"
-                        state.todayStarted -> "Continue"
-                        else -> "Play today's puzzle"
-                    },
+                    "${state.picturesRevealed} of ${state.pictureCount} revealed",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = colors.textMuted,
                 )
             }
+            GameIcon(Glyph.ARROW, colors.collection, size = 20.dp)
         }
+        Spacer(Modifier.size(10.dp))
+        Meter(
+            fraction = state.picturesRevealed.toFloat() / state.pictureCount.coerceAtLeast(1),
+            tint = colors.collection,
+        )
     }
 }
 
@@ -162,44 +245,47 @@ private fun MonthView(
     onPickDay: (CalendarDay) -> Unit,
 ) {
     val colors = LocalBoardColors.current
-    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
-        Column(Modifier.padding(12.dp)) {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                TextButton(onClick = onPrevious) { Text("‹") }
+    Panel(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            MonthArrow(Glyph.BACK, "Previous month", enabled = true, onClick = onPrevious)
+            Text(
+                "${state.month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} ${state.month.year}",
+                style = MaterialTheme.typography.titleMedium,
+                color = colors.clueText,
+            )
+            MonthArrow(
+                glyph = Glyph.ARROW,
+                description = "Next month",
+                enabled = state.month < java.time.YearMonth.from(state.today),
+                onClick = onNext,
+            )
+        }
+
+        Spacer(Modifier.size(8.dp))
+
+        Row(Modifier.fillMaxWidth()) {
+            // Monday-first, matching how the grid is built.
+            listOf("M", "T", "W", "T", "F", "S", "S").forEach { label ->
                 Text(
-                    "${state.month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} ${state.month.year}",
-                    style = MaterialTheme.typography.titleMedium,
+                    label,
+                    Modifier.weight(1f),
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.textMuted,
                 )
-                TextButton(
-                    onClick = onNext,
-                    enabled = state.month < java.time.YearMonth.from(state.today),
-                ) { Text("›") }
             }
+        }
 
+        Spacer(Modifier.size(4.dp))
+
+        state.days.chunked(7).forEach { week ->
             Row(Modifier.fillMaxWidth()) {
-                // Monday-first, matching how the grid is built.
-                listOf("M", "T", "W", "T", "F", "S", "S").forEach { label ->
-                    Text(
-                        label,
-                        Modifier.weight(1f),
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = colors.textMuted,
-                    )
-                }
-            }
-
-            Spacer(Modifier.size(4.dp))
-
-            state.days.chunked(7).forEach { week ->
-                Row(Modifier.fillMaxWidth()) {
-                    week.forEach { day ->
-                        DayCell(day, Modifier.weight(1f)) { onPickDay(day) }
-                    }
+                week.forEach { day ->
+                    DayCell(day, Modifier.weight(1f)) { onPickDay(day) }
                 }
             }
         }
@@ -207,10 +293,41 @@ private fun MonthView(
 }
 
 @Composable
+private fun MonthArrow(
+    glyph: Glyph,
+    description: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = LocalBoardColors.current
+    Box(
+        Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        GameIcon(
+            glyph = glyph,
+            tint = if (enabled) colors.clueText else colors.stroke,
+            size = 18.dp,
+            contentDescription = description,
+        )
+    }
+}
+
+/**
+ * One day.
+ *
+ * Solved is mint and unmistakable; today is a gold ring whether or not it is done, so
+ * the eye lands on it first; started is a wash. Nothing else is decorated - a calendar
+ * where every cell is styled is a calendar you cannot scan.
+ */
+@Composable
 private fun DayCell(day: CalendarDay, modifier: Modifier, onClick: () -> Unit) {
     val colors = LocalBoardColors.current
     val background = when {
-        day.completed -> colors.accent
+        day.completed -> colors.success
         day.started -> colors.highlight
         else -> Color.Transparent
     }
@@ -226,6 +343,13 @@ private fun DayCell(day: CalendarDay, modifier: Modifier, onClick: () -> Unit) {
             .padding(2.dp)
             .clip(CircleShape)
             .background(background)
+            .then(
+                if (day.isToday) {
+                    Modifier.border(2.dp, colors.accent, CircleShape)
+                } else {
+                    Modifier
+                },
+            )
             .then(if (day.isFuture) Modifier else Modifier.clickable(onClick = onClick)),
         contentAlignment = Alignment.Center,
     ) {
@@ -235,5 +359,23 @@ private fun DayCell(day: CalendarDay, modifier: Modifier, onClick: () -> Unit) {
             color = textColor,
             fontWeight = if (day.isToday) FontWeight.Bold else FontWeight.Normal,
         )
+    }
+}
+
+/**
+ * The difficulty colours.
+ *
+ * Shared with the archive through this one function so a `hard` chip is the same orange
+ * in both places. Hard has no palette slot of its own - it sits between the accent and
+ * the mistake colour, which is exactly what it means.
+ */
+@Composable
+internal fun difficultyTint(difficulty: Difficulty): Color {
+    val colors = LocalBoardColors.current
+    return when (difficulty) {
+        Difficulty.EASY -> colors.success
+        Difficulty.MEDIUM -> colors.info
+        Difficulty.HARD -> colors.accent
+        Difficulty.EXPERT -> colors.cellMistake
     }
 }

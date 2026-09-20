@@ -1,16 +1,19 @@
 package com.ganim.nonogram.ui
 
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.size
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.unit.dp
-import com.ganim.nonogram.ui.theme.LocalBoardColors
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,6 +26,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.activity.compose.LocalActivity
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -34,11 +43,15 @@ import com.ganim.nonogram.archive.ArchiveScreen
 import com.ganim.nonogram.archive.ArchiveViewModel
 import com.ganim.nonogram.daily.DailyScreen
 import com.ganim.nonogram.daily.DailyViewModel
+import com.ganim.nonogram.data.repo.PuzzleCollection
 import com.ganim.nonogram.data.repo.Settings
 import com.ganim.nonogram.game.GameScreen
 import com.ganim.nonogram.game.GameViewModel
 import com.ganim.nonogram.monetize.AdTrigger
 import com.ganim.nonogram.monetize.RewardPolicy
+import com.ganim.nonogram.ui.components.GameIcon
+import com.ganim.nonogram.ui.components.Glyph
+import com.ganim.nonogram.ui.theme.LocalBoardColors
 import com.ganim.nonogram.ui.theme.NonogramTheme
 import com.ganim.nonogram.ui.tutorial.HowToPlayScreen
 import kotlinx.coroutines.launch
@@ -47,7 +60,16 @@ import java.time.LocalDate
 /** The three top-level destinations from build plan 6.1, plus the play screen. */
 private object Routes {
     const val DAILY = "daily"
-    const val ARCHIVE = "archive"
+    const val ARCHIVE = "archive?pictures={pictures}"
+
+    /**
+     * The archive, optionally opened on the picture collection.
+     *
+     * A query argument rather than a second route: the bottom bar compares the current
+     * destination against [ARCHIVE], and a separate route would leave the Archive tab
+     * looking unselected while the archive was on screen.
+     */
+    fun archive(pictures: Boolean = false): String = "archive?pictures=$pictures"
     const val SETTINGS = "settings"
     const val HOW_TO_PLAY = "howtoplay"
     const val GAME = "game/{puzzleId}?date={date}"
@@ -57,58 +79,66 @@ private object Routes {
 }
 
 /**
- * The nav glyphs are drawn rather than imported.
+ * A bottom-bar tab.
  *
- * Material's icon artifacts are deprecated out of Material 3, and a stock icon set would
- * pull the bar towards the generic-app look section 7 steers away from. Three small
- * geometric marks - a calendar, a grid of cells, a set of sliders - cost nothing, scale
- * with the theme, and echo the board itself.
+ * [route] is the pattern the current destination is compared against; [target] is what
+ * tapping actually navigates to. They differ for the archive, whose pattern carries an
+ * optional argument - navigating to a pattern would send the literal "{pictures}" along
+ * as the argument's value.
  */
-private enum class NavGlyph { CALENDAR, GRID, SLIDERS }
-
-private data class Destination(val route: String, val label: String, val glyph: NavGlyph)
-
-private val destinations = listOf(
-    Destination(Routes.DAILY, "Daily", NavGlyph.CALENDAR),
-    Destination(Routes.ARCHIVE, "Archive", NavGlyph.GRID),
-    Destination(Routes.SETTINGS, "Settings", NavGlyph.SLIDERS),
+private data class Destination(
+    val route: String,
+    val target: String,
+    val label: String,
+    val glyph: Glyph,
 )
 
+private val destinations = listOf(
+    Destination(Routes.DAILY, Routes.DAILY, "Daily", Glyph.CALENDAR),
+    Destination(Routes.ARCHIVE, Routes.archive(), "Archive", Glyph.GRID),
+    Destination(Routes.SETTINGS, Routes.SETTINGS, "Settings", Glyph.SLIDERS),
+)
+
+/**
+ * The bottom bar.
+ *
+ * Material's `NavigationBar` indicator is a pale pill that says "selected" quietly. A
+ * game says it loudly: the active tab wears the accent outright, which is the same
+ * signal the primary button and the active tool use, so the whole app agrees on what
+ * "this one" looks like.
+ */
 @Composable
-private fun NavIcon(glyph: NavGlyph, selected: Boolean) {
+private fun BottomBar(currentRoute: String?, onSelect: (String) -> Unit) {
     val colors = LocalBoardColors.current
-    val tint = if (selected) colors.accent else colors.textMuted
-    Canvas(Modifier.size(22.dp)) {
-        val stroke = size.minDimension * 0.10f
-        when (glyph) {
-            NavGlyph.CALENDAR -> {
-                drawRect(tint, style = Stroke(width = stroke))
-                // The header band, as on a wall calendar.
-                drawRect(tint, size = Size(size.width, size.height * 0.26f))
-            }
-
-            NavGlyph.GRID -> {
-                val cell = size.width * 0.42f
-                val gap = size.width - cell * 2f
-                listOf(0f to 0f, (cell + gap) to 0f, 0f to (cell + gap), (cell + gap) to (cell + gap))
-                    .forEachIndexed { index, (x, y) ->
-                        // Two filled, two outlined - a half-solved puzzle in miniature.
-                        if (index % 3 == 0) {
-                            drawRect(tint, Offset(x, y), Size(cell, cell))
-                        } else {
-                            drawRect(tint, Offset(x, y), Size(cell, cell), style = Stroke(stroke))
-                        }
-                    }
-            }
-
-            NavGlyph.SLIDERS -> {
-                val rows = 3
-                repeat(rows) { index ->
-                    val y = size.height * (index + 0.5f) / rows
-                    drawLine(tint, Offset(0f, y), Offset(size.width, y), strokeWidth = stroke)
-                    val knobX = size.width * (if (index == 1) 0.72f else 0.32f)
-                    drawCircle(tint, radius = stroke * 1.6f, center = Offset(knobX, y))
-                }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(colors.surface)
+            .border(width = 1.dp, color = colors.stroke, shape = RectangleShape)
+            .navigationBarsPadding()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        destinations.forEach { destination ->
+            val selected = currentRoute == destination.route
+            Column(
+                Modifier
+                    .weight(1f)
+                    .height(56.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(if (selected) colors.accent else Color.Transparent)
+                    .clickable(role = Role.Tab) { onSelect(destination.target) },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                val tint = if (selected) colors.onAccent else colors.textMuted
+                GameIcon(destination.glyph, tint, size = 21.dp)
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    destination.label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = tint,
+                )
             }
         }
     }
@@ -128,6 +158,8 @@ fun NonogramApp(container: AppContainer) {
     val loadedSettings by container.settings.settings.collectAsState(initial = null)
     val settings = loadedSettings ?: Settings()
     val completedCount by container.progress.observeCompletedCount().collectAsState(initial = 0)
+    val stats by container.progress.observeStats().collectAsState(initial = null)
+    val completedIds by container.progress.observeCompletedIds().collectAsState(initial = emptySet())
     val entitlements by container.billing.entitlements.collectAsState()
     val wallet by container.monetization.wallet.collectAsState(initial = null)
     val scope = rememberCoroutineScope()
@@ -156,21 +188,7 @@ fun NonogramApp(container: AppContainer) {
         Scaffold(
             bottomBar = {
                 if (showBar) {
-                    NavigationBar {
-                        destinations.forEach { destination ->
-                            NavigationBarItem(
-                                selected = currentRoute == destination.route,
-                                onClick = { navigateTop(navController, destination.route) },
-                                icon = {
-                                    NavIcon(
-                                        glyph = destination.glyph,
-                                        selected = currentRoute == destination.route,
-                                    )
-                                },
-                                label = { Text(destination.label) },
-                            )
-                        }
-                    }
+                    BottomBar(currentRoute) { route -> navigateTop(navController, route) }
                 }
             },
         ) { padding ->
@@ -190,13 +208,20 @@ fun NonogramApp(container: AppContainer) {
                         onPlay = { puzzleId, date ->
                             navController.navigate(Routes.game(puzzleId, date))
                         },
+                        onOpenPictures = {
+                            navController.navigate(Routes.archive(pictures = true))
+                        },
                     )
                 }
 
-                composable(Routes.ARCHIVE) {
+                composable(Routes.ARCHIVE) { entry ->
                     val model: ArchiveViewModel = viewModel(
                         factory = ArchiveViewModel.Factory(container.puzzles, container.progress),
                     )
+                    val openPictures = entry.arguments?.getString("pictures") == "true"
+                    LaunchedEffect(openPictures) {
+                        if (openPictures) model.setCollection(PuzzleCollection.PICTURE)
+                    }
                     ArchiveScreen(
                         viewModel = model,
                         onOpen = { puzzleId -> navController.navigate(Routes.game(puzzleId, null)) },
@@ -208,6 +233,9 @@ fun NonogramApp(container: AppContainer) {
                         settings = settings,
                         completedCount = completedCount,
                         totalCount = container.puzzles.count + container.puzzles.pictureCount,
+                        dailyCount = stats?.totalCompleted ?: 0,
+                        // Twenty-three ids against a set, only while this screen is up.
+                        pictureCount = container.puzzles.pictures.count { it.id in completedIds },
                         onHapticsChanged = { enabled ->
                             scope.launch { container.settings.setHapticsEnabled(enabled) }
                         },
