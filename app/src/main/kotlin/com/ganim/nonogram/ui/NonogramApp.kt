@@ -99,7 +99,6 @@ private data class Destination(
 private val destinations = listOf(
     Destination(Routes.PLAY, Routes.PLAY, "Play", Glyph.STAIRS),
     Destination(Routes.DAILY, Routes.DAILY, "Daily", Glyph.CALENDAR),
-    Destination(Routes.ARCHIVE, Routes.archive(), "Archive", Glyph.GRID),
     Destination(Routes.SETTINGS, Routes.SETTINGS, "Settings", Glyph.SLIDERS),
 )
 
@@ -222,6 +221,8 @@ fun NonogramApp(container: AppContainer) {
                         // finishing level 9 must not move the streak.
                         onPlay = { puzzleId -> navController.navigate(Routes.game(puzzleId, null)) },
                         onHowToPlay = { navController.navigate(Routes.HOW_TO_PLAY) },
+                        onPictures = { navController.navigate(Routes.archive(pictures = true)) },
+                        onBrowseAll = { navController.navigate(Routes.archive()) },
                     )
                 }
 
@@ -253,6 +254,7 @@ fun NonogramApp(container: AppContainer) {
                     ArchiveScreen(
                         viewModel = model,
                         onOpen = { puzzleId -> navController.navigate(Routes.game(puzzleId, null)) },
+                        onBack = { navController.popBackStack() },
                     )
                 }
 

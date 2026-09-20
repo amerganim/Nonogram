@@ -67,8 +67,15 @@ better design anyway: a beginner stuck on level 9 can go elsewhere rather than b
 trapped, and someone who has played nonograms before is not made to grind twelve 5×5s.
 Ordering is guidance, not a gate.
 
-Daily is now the second tab, and says in one sentence what it is — shown until you have
-a streak, then it stops appearing.
+Daily is the second tab, and says in one sentence what it is — shown until you have a
+streak, then it stops appearing.
+
+**The archive stopped being a tab.** Next to the ladder it was redundant, and it was also
+wrong about what 5,000 puzzles are: a *supply*, not a catalogue. Nobody scrolls five
+thousand thumbnails hunting for one. So Play ends with two sections — **Pictures**, and
+**Free play**, a size × level picker whose action is "play a random one" — and the grid
+survives behind a *Browse all* link for the rare player who genuinely wants it. Three
+tabs now, each with one job: what's next, today, preferences.
 
 Levels come off the front of each pool and pack order is deterministic, so level 7 is the
 same puzzle on every device. `LevelLadderTest` checks that, plus the things that would

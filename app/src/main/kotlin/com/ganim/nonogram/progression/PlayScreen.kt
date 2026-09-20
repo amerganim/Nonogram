@@ -28,7 +28,10 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ganim.nonogram.daily.difficultyTint
+import com.ganim.nonogram.puzzle.model.Difficulty
 import com.ganim.nonogram.ui.components.Chip
+import com.ganim.nonogram.ui.components.GhostButton
 import com.ganim.nonogram.ui.components.GameIcon
 import com.ganim.nonogram.ui.components.Glyph
 import com.ganim.nonogram.ui.components.Meter
@@ -53,6 +56,8 @@ fun PlayScreen(
     viewModel: PlayViewModel,
     onPlay: (puzzleId: String) -> Unit,
     onHowToPlay: () -> Unit,
+    onPictures: () -> Unit,
+    onBrowseAll: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -100,8 +105,170 @@ fun PlayScreen(
         items(state.stages, key = { it.stage.name }) { stage ->
             StageSection(stage, onPlay)
         }
+
+        // Everything the ladder does not cover, at the bottom where somebody who has
+        // run out of levels will look for it.
+        item { PicturesSection(onPictures) }
+
+        item {
+            FreePlaySection(
+                free = state.freePlay,
+                onSize = viewModel::setFreeSize,
+                onDifficulty = viewModel::setFreeDifficulty,
+                onPlayOne = { viewModel.pickFreePuzzle()?.let(onPlay) },
+                onBrowseAll = onBrowseAll,
+            )
+        }
     }
 }
+
+@Composable
+private fun PicturesSection(onOpen: () -> Unit) {
+    val colors = LocalBoardColors.current
+    Panel(Modifier.fillMaxWidth(), tint = colors.collection, onClick = onOpen) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            GameIcon(Glyph.IMAGE, colors.collection, size = 22.dp)
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "Pictures",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = colors.clueText,
+                )
+                Text(
+                    "Twenty-three drawn by hand. Each one turns into something.",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = colors.textMuted,
+                )
+            }
+            GameIcon(Glyph.ARROW, colors.collection, size = 20.dp)
+        }
+    }
+}
+
+/**
+ * The other five thousand.
+ *
+ * They used to be a tab of their own, which was redundant next to the ladder and wrong
+ * about what they are: five thousand puzzles is a *supply*, not a catalogue. Nobody
+ * scrolls that many thumbnails hunting for one. So the unit is a bucket - a size and a
+ * level - and the action is "play one", with the grid kept behind a link for the rare
+ * player who genuinely wants to browse.
+ */
+@Composable
+private fun FreePlaySection(
+    free: FreePlayUi,
+    onSize: (Int) -> Unit,
+    onDifficulty: (Difficulty) -> Unit,
+    onPlayOne: () -> Unit,
+    onBrowseAll: () -> Unit,
+) {
+    val colors = LocalBoardColors.current
+    Panel(Modifier.fillMaxWidth()) {
+        Text(
+            "Free play",
+            style = MaterialTheme.typography.titleMedium,
+            color = colors.clueText,
+        )
+        Text(
+            "Five thousand more. Pick a size and a level.",
+            style = MaterialTheme.typography.labelLarge,
+            color = colors.textMuted,
+        )
+
+        Box(Modifier.height(12.dp))
+
+        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            free.sizes.forEach { size ->
+                Pick(
+                    label = "$size × $size",
+                    selected = size == free.size,
+                    tint = colors.info,
+                    modifier = Modifier.weight(1f),
+                ) { onSize(size) }
+            }
+        }
+
+        Box(Modifier.height(7.dp))
+
+        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            free.difficulties.forEach { difficulty ->
+                Pick(
+                    label = difficulty.name.lowercase(),
+                    selected = difficulty == free.difficulty,
+                    tint = difficultyTint(difficulty),
+                    modifier = Modifier.weight(1f),
+                ) { onDifficulty(difficulty) }
+            }
+            // The pack ships fewer levels at some sizes than others, so the row would
+            // otherwise stretch two chips across the width and look like a different
+            // control.
+            repeat(MAX_LEVELS_PER_SIZE - free.difficulties.size) { Box(Modifier.weight(1f)) }
+        }
+
+        Box(Modifier.height(12.dp))
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                if (free.allSolved) {
+                    "All ${free.total} solved"
+                } else {
+                    "${free.solved} of ${free.total} solved"
+                },
+                style = MaterialTheme.typography.labelLarge,
+                color = if (free.allSolved) colors.success else colors.textMuted,
+                modifier = Modifier.weight(1f),
+            )
+            GhostButton(
+                text = "Browse all",
+                onClick = onBrowseAll,
+                glyph = Glyph.GRID,
+            )
+        }
+
+        Box(Modifier.height(10.dp))
+
+        PrimaryButton(
+            text = "Play a random one",
+            onClick = onPlayOne,
+            modifier = Modifier.fillMaxWidth(),
+            glyph = Glyph.SPARK,
+        )
+    }
+}
+
+@Composable
+private fun Pick(
+    label: String,
+    selected: Boolean,
+    tint: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val colors = LocalBoardColors.current
+    val shape = RoundedCornerShape(13.dp)
+    Box(
+        modifier
+            .height(40.dp)
+            .clip(shape)
+            .background(if (selected) tint else Color.Transparent)
+            .border(1.dp, if (selected) colors.accentDeep else colors.stroke, shape)
+            .clickable(role = Role.RadioButton, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (selected) colors.onAccentFill else colors.textMuted,
+            maxLines = 1,
+        )
+    }
+}
+
+/** The widest level row any size has, so narrower ones keep the same chip width. */
+private const val MAX_LEVELS_PER_SIZE = 2
 
 @Composable
 private fun HowToPlayCard(onClick: () -> Unit) {

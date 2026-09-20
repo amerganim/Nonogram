@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -62,6 +63,7 @@ import com.ganim.nonogram.ui.theme.LocalBoardColors
 fun ArchiveScreen(
     viewModel: ArchiveViewModel,
     onOpen: (puzzleId: String) -> Unit,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -71,11 +73,34 @@ fun ArchiveScreen(
 
     Column(modifier.fillMaxSize().background(colors.boardBackground)) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-            Text(
-                if (showingPictures) "Pictures" else "Archive",
-                style = MaterialTheme.typography.headlineSmall,
-                color = colors.clueText,
-            )
+            // This is reached from Play now rather than from a tab, so it needs a way
+            // out of its own: a drill-in screen with no back control is a dead end for
+            // anyone who navigates by what is on the screen rather than by the system
+            // gesture.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Box(
+                    Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(15.dp))
+                        .background(colors.surface)
+                        .border(1.dp, colors.stroke, RoundedCornerShape(15.dp))
+                        .clickable(onClick = onBack),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    GameIcon(Glyph.BACK, colors.clueText, size = 19.dp, contentDescription = "Back")
+                }
+                Text(
+                    if (showingPictures) "Pictures" else "Archive",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = colors.clueText,
+                )
+            }
+
+            Box(Modifier.height(6.dp))
+
             Text(
                 if (showingPictures) {
                     "Hand-drawn grids. Names stay hidden until you solve them."
