@@ -1,5 +1,7 @@
 package com.ganim.nonogram.progression
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,9 +23,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
@@ -38,6 +45,8 @@ import com.ganim.nonogram.ui.components.Meter
 import com.ganim.nonogram.ui.components.Panel
 import com.ganim.nonogram.ui.components.PrimaryButton
 import com.ganim.nonogram.ui.theme.LocalBoardColors
+import com.ganim.nonogram.ui.theme.LocalReduceMotion
+import com.ganim.nonogram.ui.theme.Motion
 
 /**
  * The home screen: a ladder of numbered levels.
@@ -62,6 +71,15 @@ fun PlayScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val colors = LocalBoardColors.current
+
+    // A cleared stage folds to one line. Twelve 5x5s you have already solved are not
+    // worth two screens of scrolling, and everything below the ladder - the pictures,
+    // the other five thousand - is otherwise buried behind them.
+    //
+    // Held here rather than in the view model: which sections are open is view state,
+    // it means nothing to the rest of the app, and it should not survive being killed
+    // in the background. A Set of names saves and restores across rotation for free.
+    var opened by rememberSaveable { mutableStateOf(emptySet<String>()) }
 
     LazyColumn(
         modifier.fillMaxSize().background(colors.boardBackground),
@@ -103,7 +121,20 @@ fun PlayScreen(
         }
 
         items(state.stages, key = { it.stage.name }) { stage ->
-            StageSection(stage, onPlay)
+            StageSection(
+                stage = stage,
+                // A stage you are still working through is always open; only a finished
+                // one folds, and only until you ask for it back.
+                expanded = !stage.cleared || stage.stage.name in opened,
+                onToggle = {
+                    opened = if (stage.stage.name in opened) {
+                        opened - stage.stage.name
+                    } else {
+                        opened + stage.stage.name
+                    }
+                },
+                onPlay = onPlay,
+            )
         }
 
         // Everything the ladder does not cover, at the bottom where somebody who has
@@ -373,10 +404,30 @@ private fun AllClearCard() {
 }
 
 @Composable
-private fun StageSection(stage: StageUi, onPlay: (String) -> Unit) {
+private fun StageSection(
+    stage: StageUi,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    onPlay: (String) -> Unit,
+) {
     val colors = LocalBoardColors.current
+    val reduceMotion = LocalReduceMotion.current
+    val turn by animateFloatAsState(
+        targetValue = if (expanded) HALF_TURN else 0f,
+        animationSpec = tween(Motion.duration(Motion.QUICK, reduceMotion)),
+        label = "stageChevron",
+    )
+
     Panel(Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            // Only a cleared stage has anything to toggle, so only that one takes the
+            // tap - a header that looks pressable and does nothing is worse than one
+            // that plainly is not.
+            Modifier
+                .fillMaxWidth()
+                .then(if (stage.cleared) Modifier.clickable(onClick = onToggle) else Modifier),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Column(Modifier.weight(1f)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -392,9 +443,11 @@ private fun StageSection(stage: StageUi, onPlay: (String) -> Unit) {
                     }
                 }
                 Text(
-                    stage.stage.blurb,
+                    // Folded, the blurb is the wrong thing to say: what this stage is
+                    // like no longer matters once it is behind you.
+                    if (stage.cleared && !expanded) "Cleared" else stage.stage.blurb,
                     style = MaterialTheme.typography.labelLarge,
-                    color = colors.textMuted,
+                    color = if (stage.cleared && !expanded) colors.success else colors.textMuted,
                 )
             }
             Text(
@@ -402,7 +455,19 @@ private fun StageSection(stage: StageUi, onPlay: (String) -> Unit) {
                 style = MaterialTheme.typography.titleMedium,
                 color = if (stage.cleared) colors.success else colors.textMuted,
             )
+            if (stage.cleared) {
+                Box(Modifier.width(6.dp))
+                GameIcon(
+                    glyph = Glyph.CHEVRON_DOWN,
+                    tint = colors.textMuted,
+                    modifier = Modifier.rotate(turn),
+                    size = 18.dp,
+                    contentDescription = if (expanded) "Hide levels" else "Show levels",
+                )
+            }
         }
+
+        if (!expanded) return@Panel
 
         Box(Modifier.height(10.dp))
         Meter(stage.fraction, if (stage.cleared) colors.success else colors.accent)
@@ -424,6 +489,9 @@ private fun StageSection(stage: StageUi, onPlay: (String) -> Unit) {
         }
     }
 }
+
+/** Half a turn, so the chevron points up when its section is open. */
+private const val HALF_TURN = 180f
 
 /**
  * One level.

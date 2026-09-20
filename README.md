@@ -70,6 +70,10 @@ Ordering is guidance, not a gate.
 Daily is the second tab, and says in one sentence what it is — shown until you have a
 streak, then it stops appearing.
 
+A cleared stage folds to one line — a check, "Cleared", and its count — so twelve 5×5s
+you have already solved stop standing between you and everything below them. Tapping the
+line opens it again.
+
 **The archive stopped being a tab.** Next to the ladder it was redundant, and it was also
 wrong about what 5,000 puzzles are: a *supply*, not a catalogue. Nobody scrolls five
 thousand thumbnails hunting for one. So Play ends with two sections — **Pictures**, and
