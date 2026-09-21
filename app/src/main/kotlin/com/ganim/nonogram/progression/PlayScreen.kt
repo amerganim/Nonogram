@@ -139,7 +139,9 @@ fun PlayScreen(
 
         // Everything the ladder does not cover, at the bottom where somebody who has
         // run out of levels will look for it.
-        item { PicturesSection(onPictures) }
+        if (state.pictures > 0) {
+            item { PicturesSection(state.pictures, state.picturesRevealed, onPictures) }
+        }
 
         item {
             FreePlaySection(
@@ -154,7 +156,7 @@ fun PlayScreen(
 }
 
 @Composable
-private fun PicturesSection(onOpen: () -> Unit) {
+private fun PicturesSection(total: Int, revealed: Int, onOpen: () -> Unit) {
     val colors = LocalBoardColors.current
     Panel(Modifier.fillMaxWidth(), tint = colors.collection, onClick = onOpen) {
         Row(
@@ -169,7 +171,13 @@ private fun PicturesSection(onOpen: () -> Unit) {
                     color = colors.clueText,
                 )
                 Text(
-                    "Twenty-three drawn by hand. Each one turns into something.",
+                    // Counted, not written down. The last time this was a word in a
+                    // sentence, adding drawings made the sentence wrong.
+                    if (revealed == 0) {
+                        "$total drawn by hand. Each one turns into something."
+                    } else {
+                        "$revealed of $total revealed"
+                    },
                     style = MaterialTheme.typography.labelLarge,
                     color = colors.textMuted,
                 )

@@ -6,15 +6,15 @@ picture. You finish one, you get a pleasant silhouette, and no moment of recogni
 
 Recognition is the actual payoff of a nonogram. It is the reason someone fills in the
 last square instead of closing the app. So alongside the 5,000 generated puzzles there
-are 23 drawings made by hand, each with a name, shipped as a second pack.
+are 49 drawings made by hand, each with a name, shipped as a second pack.
 
 ## What ships
 
 | | Generated | Pictures |
 |---|---|---|
-| Count | 5,000 | 23 |
-| Asset | `puzzles.bin` (178 KB) | `pictures.bin` (726 bytes) |
-| Sizes | 5–20 | 10 (×18), 15 (×5) |
+| Count | 5,000 | 49 |
+| Asset | `puzzles.bin` (178 KB) | `pictures.bin` (1.5 KB) |
+| Sizes | 5–20 | 10 (×38), 15 (×11) |
 | Named | no | yes |
 | Used by the daily | yes | no |
 
@@ -22,9 +22,9 @@ are 23 drawings made by hand, each with a name, shipped as a second pack.
 it is wrong twice over. The daily selector draws from pools filtered out of the generated
 pack, so adding records would shift every index and change every daily puzzle ever
 assigned — including ones players have already solved, whose progress is keyed by puzzle
-id. And 23 drawings spread across a daily rotation would be exhausted inside a month,
+id. And 49 drawings spread across a daily rotation would be exhausted inside a month,
 after which the feature silently stops existing. They are their own collection, browsable
-at any time, in the archive's **Pictures** tab.
+at any time, from the **Pictures** card on the Play screen.
 
 ## Format v2
 
@@ -50,7 +50,7 @@ independent ways, because they catch different faults:
 - `BacktrackingVerifier` — counts solutions, capped at 2. Logic reaching *an* answer is
   not proof it is the *only* answer.
 
-`PictureLibraryTest` runs both over all 23 on every test run, so a drawing cannot be
+`PictureLibraryTest` runs both over all 49 on every test run, so a drawing cannot be
 edited into an unsolvable state without the build saying so. To check by hand while
 drawing:
 
@@ -60,7 +60,36 @@ drawing:
 
 This prints OK / STALL / BAD / BROKEN per drawing and writes nothing.
 
-## Three that failed, and why
+## What fails, and why
+
+Roughly one drawing in six does not survive first contact, and the failures are not
+random — they follow from how line solving works. Two kinds, and they need different
+fixes.
+
+**The solver rejects it.** Thin shapes, outlines and diagonals. A line made of single
+squares has a clue like `1 1 1`, which pins almost nothing, so the solver runs out of
+forced moves in the middle (a *stall*) or the search finds two arrangements the clues
+cannot tell apart. A pure diagonal is the worst case: every line is one run that can
+slide, and nothing holds it. The fix is always the same — make the shape solid. Of the
+second batch, four failed this way: a pair of cherries on thin stems (three solutions), a
+carrot that tapered a square at a time (stalled), a diagonal pencil (two solutions, and
+no redrawing keeps it a pencil — dropped), and a crab with outlined claws (three
+solutions).
+
+**The eye rejects it.** This one no test can catch, and it is the more common failure. A
+drawing can be perfectly solvable and simply not look like the thing. Sometimes the fix
+is a redraw; often it is cheaper and more honest to *rename it to what it actually is*,
+because the name is the payoff and a wrong name spoils the moment the picture exists for:
+
+| Drawn as | Ships as | Why |
+|---|---|---|
+| Cherry | **Frying pan** | round body, long handle — nobody sees fruit |
+| Diamond | **Trophy** | two handles and a tapering cup |
+| Candle | **Chess pawn** | the flame never read as a flame |
+| Crab | **Frog** | two eyes on top and four legs; a crab's claws are at its sides |
+| Carrot | **Fox** | two sprigs are ears and a narrowing body is a muzzle. Three attempts, same result |
+
+## Three from the first batch, and why
 
 These are the interesting part — the failures are not random, they follow from how
 line-solving works.
@@ -78,7 +107,7 @@ line-solving works.
 
 Two more, **Envelope** and **Leaf**, passed the solver and failed a visual review — the
 envelope's flap was broken into pieces that read as noise, and the leaf was parallel
-diagonals that read as stripes. Both redrawn. That review is a contact sheet of all 23
+diagonals that read as stripes. Both redrawn. That review is a contact sheet of every drawing
 rendered side by side; there is no automated substitute for looking at them.
 
 ## Adding a drawing

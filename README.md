@@ -143,7 +143,7 @@ and asserts every move agrees with the answer and that the steps decide all 25 s
 exactly once. A tutorial that teaches a wrong move is worse than no tutorial.
 
 **Picture puzzles** (`puzzle/pictures/`). The generator makes contiguous blobs, which
-look organic but are not *pictures*; recognition is the payoff a nonogram exists for. 23
+look organic but are not *pictures*; recognition is the payoff a nonogram exists for. 49
 hand-drawn, named grids ship as a second pack, held to the same bar as a generated
 puzzle — logic-solvable, exactly one solution, checked on every test run. They are a
 separate collection in the archive rather than part of the daily rotation, for reasons

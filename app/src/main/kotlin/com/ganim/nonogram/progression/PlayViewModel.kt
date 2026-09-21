@@ -60,6 +60,9 @@ data class PlayUiState(
     val total: Int = 0,
     val loaded: Boolean = false,
     val freePlay: FreePlayUi = FreePlayUi(),
+    /** How many hand-drawn pictures exist, and how many have been revealed. */
+    val pictures: Int = 0,
+    val picturesRevealed: Int = 0,
 )
 
 /**
@@ -181,6 +184,8 @@ class PlayViewModel(
 
                 PlayUiState(
                     freePlay = free,
+                    pictures = puzzles.pictureCount,
+                    picturesRevealed = puzzles.pictures.count { it.id in completed },
                     stages = projected,
                     next = projected.firstNotNullOfOrNull { s -> s.levels.firstOrNull { it.isNext } },
                     solved = projected.sumOf { it.completedCount },
