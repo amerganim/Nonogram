@@ -55,6 +55,7 @@ class GameViewModel(
     puzzle: Puzzle,
     private val progress: ProgressRepository,
     private val hintProvider: HintProvider = HintProvider(),
+    private val hintExplainer: HintExplainer = HintExplainer(),
     restored: GameState? = null,
     /** Called when the puzzle is finished, so the daily screen can move the streak on. */
     private val onCompleted: suspend (GameState) -> Unit = {},
@@ -75,6 +76,20 @@ class GameViewModel(
     private val dragTracker = DragTracker()
 
     /** The cell under the finger, for the row/column highlight (5.1). */
+    /**
+     * Why the last hinted square is what it is.
+     *
+     * Every other nonogram app's hint fills a square and says nothing, which unsticks
+     * you once and leaves you no better at the next one. This app has a real line
+     * solver, so it can name the move instead - and a player who learns overlap has
+     * learned the most useful technique in the game.
+     *
+     * Cleared as soon as the player touches the board: the sentence is about a position
+     * that no longer exists once they paint.
+     */
+    private val _hintReason = MutableStateFlow<String?>(null)
+    val hintReason: StateFlow<String?> = _hintReason.asStateFlow()
+
     private val _highlight = MutableStateFlow<CellRef?>(null)
     val highlight: StateFlow<CellRef?> = _highlight.asStateFlow()
 
@@ -145,6 +160,7 @@ class GameViewModel(
     // --- input -----------------------------------------------------------------------
 
     fun onTap(cell: CellRef) {
+        _hintReason.value = null
         val index = indexOf(cell) ?: return
         val before = _state.value
         val next = GameEngine.tap(before, index)
@@ -159,6 +175,7 @@ class GameViewModel(
      * gesture only without flipping the mode button.
      */
     fun onDragStart(cell: CellRef, oppositeMode: Boolean = false) {
+        _hintReason.value = null
         val index = indexOf(cell) ?: return
         val mode = if (oppositeMode) oppositeOf(_state.value.paintMode) else null
         dragTarget = GameEngine.dragTargetFor(_state.value, index, mode) ?: return
@@ -242,8 +259,17 @@ class GameViewModel(
     }
 
     private fun reveal(index: Int) {
+        // Explained against the board as it was *before* the reveal - afterwards the
+        // square is no longer a deduction, it is a fact, and the reasoning reads as a
+        // statement of the obvious.
+        _hintReason.value = hintExplainer.explain(_state.value, index)?.text
         _state.value = GameEngine.revealHint(_state.value, index)
         emit(HapticKind.CONFIRM)
+    }
+
+    /** Drops the hint sentence once the player moves on. */
+    fun dismissHintReason() {
+        _hintReason.value = null
     }
 
     fun restoreLife() {
@@ -290,7 +316,13 @@ class GameViewModel(
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            GameViewModel(puzzle, progress, HintProvider(), restored, onCompleted, monetization) as T
+            GameViewModel(
+                puzzle = puzzle,
+                progress = progress,
+                restored = restored,
+                onCompleted = onCompleted,
+                monetization = monetization,
+            ) as T
     }
 
     private companion object {

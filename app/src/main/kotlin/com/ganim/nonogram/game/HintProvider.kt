@@ -27,7 +27,10 @@ import com.ganim.nonogram.puzzle.solver.SolveResult
  * nothing, discard them and solve from the confirmed fills alone. That second pass
  * always works, because the puzzle is solvable from a blank board by construction.
  */
-class HintProvider(private val solver: PuzzleSolver = PuzzleSolver()) {
+class HintProvider(
+    private val solver: PuzzleSolver = PuzzleSolver(),
+    private val explainer: HintExplainer = HintExplainer(),
+) {
 
     /**
      * The cell index to reveal, or null if there is nothing left to deduce.
@@ -61,21 +64,39 @@ class HintProvider(private val solver: PuzzleSolver = PuzzleSolver()) {
     /**
      * Chooses among the newly forced cells.
      *
-     * Filled cells are preferred: revealing a square that should be filled moves the
-     * picture along and feels like progress, while revealing an empty one mostly just
-     * narrows the search. Within that preference the choice is by reading order, so the
-     * same board always yields the same hint - a hint that moved around between taps
-     * would feel random, which is the exact failure the plan warns about.
+     * Three preferences, in order.
+     *
+     * **Explainable first.** The solver reaches many of its answers by playing rows and
+     * columns off each other for several passes. Those squares are forced, but no
+     * sentence describes them, and a hint the player cannot learn from is a hint that
+     * only unsticks them. A square that one line settles by itself can be explained -
+     * and it is also the move they were most likely to have found alone, which is the
+     * better thing to be shown.
+     *
+     * **Then filled.** Revealing a square that should be filled moves the picture along
+     * and feels like progress; revealing an empty one mostly narrows the search.
+     *
+     * **Then reading order**, so the same board always yields the same hint. A hint that
+     * moved around between taps would feel random, which is the exact failure the build
+     * plan warns about.
      */
     private fun pickBest(state: GameState, solved: Array<CellState>): Int? {
-        var firstEmpty: Int? = null
+        var filled: Int? = null
+        var empty: Int? = null
+        var explainableEmpty: Int? = null
+
         for (i in solved.indices) {
             if (state.board[i] != CellState.UNKNOWN) continue
-            when {
-                solved[i] == CellState.FILLED -> return i
-                solved[i].isKnownEmpty -> if (firstEmpty == null) firstEmpty = i
+            val isFilled = solved[i] == CellState.FILLED
+            if (!isFilled && !solved[i].isKnownEmpty) continue
+
+            if (explainer.explain(state, i) != null) {
+                if (isFilled) return i
+                if (explainableEmpty == null) explainableEmpty = i
             }
+            if (isFilled && filled == null) filled = i
+            if (!isFilled && empty == null) empty = i
         }
-        return firstEmpty
+        return explainableEmpty ?: filled ?: empty
     }
 }

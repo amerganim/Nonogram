@@ -84,6 +84,7 @@ fun GameScreen(
     // changes.
     val boardState = viewModel.state.collectAsStateWithLifecycle()
     val highlightState = viewModel.highlight.collectAsStateWithLifecycle()
+    val hintReason by viewModel.hintReason.collectAsStateWithLifecycle()
     val state by remember { derivedStateOf { boardState.value.chrome() } }
     val colors = LocalBoardColors.current
     val view = LocalView.current
@@ -175,6 +176,28 @@ fun GameScreen(
             hintBusy = offeringAdForHint,
             onExit = onExit,
         )
+
+        hintReason?.let { reason ->
+            Row(
+                Modifier
+                    .padding(horizontal = 12.dp)
+                    .padding(top = 10.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(colors.surface)
+                    .border(1.dp, colors.info, RoundedCornerShape(18.dp))
+                    .clickable { viewModel.dismissHintReason() }
+                    .padding(14.dp),
+                horizontalArrangement = Arrangement.spacedBy(11.dp),
+            ) {
+                GameIcon(Glyph.SPARK, colors.info, size = 19.dp)
+                Text(
+                    reason,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.clueText,
+                )
+            }
+        }
 
         Box(
             Modifier
