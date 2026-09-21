@@ -21,7 +21,7 @@ Built against `nonogram-app-build-plan.md`. Phases run in order; see **Status** 
 | 8 | Publishing (human-operated) | **Start now, in parallel** — see below |
 | — | Onboarding and picture puzzles | **Built**, verified on device — see below |
 
-**299 tests, 0 failures**, running in about 7 seconds.
+**305 tests, 0 failures**, running in about 7 seconds.
 
 ### Phase 4 acceptance criteria
 
@@ -50,6 +50,29 @@ Animation durations live in `Motion` so reduce-motion applies in one place.
       **476 frames, 1 janky (0.21%), p50 12 ms** over sustained flinging
 - [x] Progress survives app kill — confirmed on device. *App update* is still untested
       in the sense that matters: there is only a v1 schema, so no migration exists yet.
+
+### Beyond the plan — the hint explains itself
+
+Every nonogram app has a hint button, and in all of them it fills a square and tells you
+nothing: it unsticks you once and leaves you no better at the next one.
+
+This one can do better because it already contains a real line solver — the one that
+proves every shipped puzzle needs no guessing. It knows not just *which* square is forced
+but *which line* forced it, so the hint names the move:
+
+> Row 2 needs 2 + 2 plus a gap between each, which is exactly 5. There is only one way to
+> fit that.
+
+Four shapes of argument — a line its clues exactly fill, overlap, a finished clue, a
+blank line — each checked against the line before it is offered. Anything that cannot be
+justified says nothing rather than something vague: an explanation that turns out to be
+wrong is worse than none, because a player who follows it and collects a mistake stops
+trusting the app.
+
+It also changed *which* square gets hinted. The solver reaches many answers by playing
+rows and columns off each other for several passes; those squares are forced but
+unexplainable. The hint now prefers one a single line settles — which is also the move
+the player was most likely to have found alone.
 
 ### Beyond the plan — the app now opens on a ladder, not a date
 
