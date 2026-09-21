@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -33,6 +34,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -175,6 +179,11 @@ fun NonogramApp(container: AppContainer) {
     val stats by container.progress.observeStats().collectAsState(initial = null)
     val completedIds by container.progress.observeCompletedIds().collectAsState(initial = emptySet())
     val entitlements by container.billing.entitlements.collectAsState()
+    // Play Billing takes a moment to connect, and until it does it reports no
+    // entitlement. Without the cached answer, somebody who has paid can be shown an
+    // interstitial in the first seconds of a launch - which is the one group who must
+    // never see one. The cache was already being written; nothing read it.
+    val cachedAdFree by container.monetization.cachedAdFree.collectAsState(initial = false)
     val wallet by container.monetization.wallet.collectAsState(initial = null)
     val scope = rememberCoroutineScope()
     val activity = LocalActivity.current
@@ -318,7 +327,26 @@ fun NonogramApp(container: AppContainer) {
                             monetization = container.monetization,
                         ),
                     )
-                    LaunchedEffect(model) { model.onResume() }
+                    // The timer has to stop when the app goes away. Without this it
+                    // kept ticking in the background, so answering one message mid-puzzle
+                    // added a minute to your time - and the board's last change relied on
+                    // the debounced autosave surviving a kill. onPause() stops the clock
+                    // and forces a write; it existed all along and nothing called it.
+                    val lifecycle = LocalLifecycleOwner.current.lifecycle
+                    DisposableEffect(lifecycle, model) {
+                        val observer = LifecycleEventObserver { _, event ->
+                            when (event) {
+                                Lifecycle.Event.ON_RESUME -> model.onResume()
+                                Lifecycle.Event.ON_PAUSE -> model.onPause()
+                                else -> Unit
+                            }
+                        }
+                        lifecycle.addObserver(observer)
+                        onDispose {
+                            lifecycle.removeObserver(observer)
+                            model.onPause()
+                        }
+                    }
                     LaunchedEffect(settings.hapticsEnabled) {
                         model.setHapticsEnabled(settings.hapticsEnabled)
                     }
@@ -343,7 +371,7 @@ fun NonogramApp(container: AppContainer) {
                                 container.ads.maybeShowInterstitial(
                                     activity = host,
                                     trigger = AdTrigger.RESULTS_DISMISSED,
-                                    adFree = entitlements.adFree,
+                                    adFree = entitlements.adFree || cachedAdFree,
                                 )
                             }
                         },

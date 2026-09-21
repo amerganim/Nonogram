@@ -302,37 +302,6 @@ fun Meter(
     }
 }
 
-/** A circular glyph badge - a lives pip, a solved day, a count in a corner. */
-@Composable
-fun Pip(
-    glyph: Glyph?,
-    tint: Color,
-    modifier: Modifier = Modifier,
-    filled: Boolean = true,
-    diameter: androidx.compose.ui.unit.Dp = 32.dp,
-    contentDescription: String? = null,
-) {
-    val colors = LocalBoardColors.current
-    val shape = RoundedCornerShape(50)
-    Box(
-        modifier
-            .size(diameter)
-            .clip(shape)
-            .background(if (filled) tint else tint.copy(alpha = TINT_FILL))
-            .then(if (filled) Modifier else Modifier.border(BorderStroke(2.dp, tint), shape)),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (glyph != null) {
-            GameIcon(
-                glyph,
-                if (filled) colors.onAccentFill else tint,
-                size = diameter * 0.5f,
-                contentDescription = contentDescription,
-            )
-        }
-    }
-}
-
 /** A row of numbers and their labels, as used under the finished picture. */
 @Composable
 fun ScoreRow(entries: List<Triple<String, String, Color>>, modifier: Modifier = Modifier) {

@@ -122,17 +122,6 @@ class PuzzleRepository(
     /** The pool the daily selector draws from for a given day. */
     fun poolFor(spec: DailySpec): List<ArchiveEntry> = filter(spec.size, spec.difficulty)
 
-    /**
-     * The puzzle for a given date (6.2).
-     *
-     * Deterministic: the same date yields the same puzzle on every device and every
-     * fresh install, with nothing stored and nothing fetched.
-     */
-    fun dailyFor(date: LocalDate): Puzzle? {
-        val pool = poolFor(DailySchedule.specFor(date))
-        if (pool.isEmpty()) return null
-        return loader.puzzleAt(pool[DailySelector.indexInPool(date, pool.size)].index)
-    }
 
     /** The daily's id without decoding the grid, for calendar rows. */
     fun dailyIdFor(date: LocalDate): String? {

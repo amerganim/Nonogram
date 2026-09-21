@@ -42,27 +42,9 @@ class PuzzlePackLoader(
     /** Shape and rating for every puzzle, without decoding any grids. */
     fun summaries(): List<PuzzlePack.Summary> = PuzzlePack.summaries(bytes)
 
-    /**
-     * Finds a puzzle by id, decoding until it matches.
-     *
-     * Linear, and only used when restoring a saved session at launch - once, against a
-     * 5,000 entry pack. If the archive ever needs this per frame it should build an
-     * id-to-index map instead.
-     */
-    fun findById(id: String): Puzzle? {
-        for (i in 0 until count) {
-            val puzzle = puzzleAt(i)
-            if (puzzle.id == id) return puzzle
-        }
-        return null
-    }
 
     /** Pack positions matching a size and difficulty, for the archive filters (6.4). */
-    fun indicesMatching(size: Int? = null, difficulty: Difficulty? = null): List<Int> =
-        (0 until count).filter { i ->
-            val puzzle = puzzleAt(i)
-            (size == null || puzzle.width == size) && (difficulty == null || puzzle.difficulty == difficulty)
-        }
+
 
     companion object {
         const val DEFAULT_ASSET = "puzzles.bin"

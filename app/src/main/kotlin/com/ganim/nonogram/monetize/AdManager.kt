@@ -196,23 +196,3 @@ class AdMobAdManager(
         session = AdPolicy.recordPuzzleCompleted(session)
     }
 }
-
-/**
- * Stands in for the SDK where there is no Activity, and for tests.
- *
- * Reports [RewardOutcome.NO_FILL], which [RewardPolicy] grants - so with ads switched
- * off entirely the game stays fully playable rather than dead-ending at the hint button.
- */
-class NoAdsManager : AdManager {
-    override val isRewardedReady: Boolean get() = false
-    override fun initialize() = Unit
-    override fun preloadRewarded() = Unit
-    override suspend fun showRewarded(activity: Activity): RewardOutcome = RewardOutcome.NO_FILL
-    override suspend fun maybeShowInterstitial(
-        activity: Activity,
-        trigger: AdTrigger,
-        adFree: Boolean,
-    ): Boolean = false
-
-    override fun onPuzzleCompleted() = Unit
-}

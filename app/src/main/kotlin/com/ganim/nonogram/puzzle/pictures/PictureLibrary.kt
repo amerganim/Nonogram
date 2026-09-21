@@ -412,7 +412,7 @@ object PictureLibrary {
         ),
     )
 
-    val byName: Map<String, Picture> = all.associateBy { it.name }
+
 
     /** Sizes the library draws at, so the archive can offer them as filters. */
     val sizes: List<Int> = all.map { it.size }.distinct().sorted()

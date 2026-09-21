@@ -95,8 +95,7 @@ class LineSolver(private val cacheCapacity: Int = 1 shl 16) {
             ?: throw ContradictoryLineException("Clue $clue cannot be satisfied by line $current")
 
     /** True when at least one line consistent with [current] satisfies [clue]. */
-    fun isSatisfiable(clue: Clue, current: List<CellState>): Boolean =
-        solveOrNull(clue, current) != null
+
 
     private fun deduce(blocks: IntArray, n: Int, filledMask: Int, emptyMask: Int): Long {
         val k = blocks.size
@@ -208,10 +207,3 @@ class LineSolver(private val cacheCapacity: Int = 1 shl 16) {
 /** Thrown by [LineSolver.solve] when a line admits no valid placement. */
 class ContradictoryLineException(message: String) : IllegalArgumentException(message)
 
-/**
- * Convenience form of the signature named in build plan 4.2, for callers that do not
- * hold a [LineSolver]. Allocates a fresh solver, so it gains nothing from memoisation -
- * hot paths should keep a [LineSolver] instance.
- */
-fun solveLine(clue: Clue, current: List<CellState>): List<CellState> =
-    LineSolver().solve(clue, current)

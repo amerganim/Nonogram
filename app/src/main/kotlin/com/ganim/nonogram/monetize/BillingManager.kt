@@ -224,13 +224,3 @@ class PlayBillingManager(
         if (client.isReady) client.endConnection()
     }
 }
-
-/** Used when billing is unavailable, and in tests. Nothing is owned, nothing is pending. */
-class NoBillingManager : BillingManager {
-    override val entitlements = MutableStateFlow(Entitlements()).asStateFlow()
-    override val products = MutableStateFlow<Map<String, ProductDetails>>(emptyMap()).asStateFlow()
-    override fun connect() = Unit
-    override fun refresh() = Unit
-    override fun launchPurchase(activity: Activity, sku: String) = Unit
-    override fun dispose() = Unit
-}
