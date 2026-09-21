@@ -68,6 +68,30 @@ class AppContainer(context: Context, val clock: GameClock = GameClock.System) {
         ).also { it.connect() }
     }
 
+    init {
+        // Reading the pack builds an index of 5,000 records. Whichever screen touches
+        // it first otherwise pays for that on the main thread, which on a Galaxy A15
+        // was a visible hitch on the first tab switch. Started here so it is almost
+        // always finished before anything asks; `by lazy` is synchronised, so a screen
+        // that does ask early waits for this rather than repeating the work.
+        appScope.launch(Dispatchers.Default) {
+            puzzles.entries
+            puzzles.pictures
+            // Groups the pools, which the daily calendar asks about 42 times a redraw.
+            puzzles.poolFor(com.ganim.nonogram.daily.DailySchedule.specFor(clock.today()))
+
+            // minSdk is 24, so java.time is desugared, and the desugar library loads its
+            // time-zone and locale tables on first use. Measured on a Galaxy A15 that is
+            // a ~250ms stall, and it landed on whichever screen first showed a date -
+            // the first visit to Daily, every install. Touching it here moves the cost
+            // to a background thread nobody is watching.
+            val today = clock.today()
+            val locale = java.util.Locale.getDefault()
+            today.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, locale)
+            today.month.getDisplayName(java.time.format.TextStyle.FULL, locale)
+        }
+    }
+
     private var entitlementMirror: Job? = null
 
     /**

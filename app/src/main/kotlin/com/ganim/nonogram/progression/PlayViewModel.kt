@@ -10,7 +10,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** One level as the screen needs it: the rung, plus what the player has done with it. */
 data class LevelUi(
@@ -72,7 +74,14 @@ class PlayViewModel(
     progress: ProgressRepository,
 ) : ViewModel() {
 
-    private val stages = LevelLadder.build(puzzles.entries)
+    /**
+     * Built off the main thread, because it reads the pack index.
+     *
+     * The screen shows its header and nothing else until this lands - a frame or two,
+     * and far better than holding up the app's first frame while 5,000 records are
+     * read.
+     */
+    private var stages: List<LevelLadder.StageLevels> = emptyList()
 
     /**
      * Which levels exist at each size.
@@ -82,17 +91,10 @@ class PlayViewModel(
      * explanation, so the difficulty chips are derived from the pack rather than from
      * the enum.
      */
-    private val levelsBySize: Map<Int, List<Difficulty>> =
-        puzzles.entries.groupBy { it.size }
-            .mapValues { (_, group) -> group.map { it.difficulty }.distinct().sorted() }
+    private var levelsBySize: Map<Int, List<Difficulty>> = emptyMap()
 
-    private val bucket = MutableStateFlow(
-        puzzles.availableSizes.first().let { size ->
-            size to levelsBySize.getValue(size).first()
-        },
-    )
-
-    private val entries = puzzles.entries
+    /** Null until the pack has been read; free play is hidden until then. */
+    private val bucket = MutableStateFlow<Pair<Int, Difficulty>?>(null)
 
     /** The levels [size] ships at, for the chips. */
     fun difficultiesFor(size: Int): List<Difficulty> = levelsBySize[size].orEmpty()
@@ -101,12 +103,13 @@ class PlayViewModel(
         // Carry the level across if this size has it; otherwise fall to its easiest,
         // because silently keeping an impossible pair would empty the bucket.
         val levels = difficultiesFor(size)
-        val keep = bucket.value.second.takeIf { it in levels } ?: levels.first()
+        if (levels.isEmpty()) return
+        val keep = bucket.value?.second?.takeIf { it in levels } ?: levels.first()
         bucket.value = size to keep
     }
 
     fun setFreeDifficulty(difficulty: Difficulty) {
-        bucket.value = bucket.value.first to difficulty
+        bucket.value = bucket.value?.copy(second = difficulty) ?: return
     }
 
     /**
@@ -118,8 +121,8 @@ class PlayViewModel(
      * the button never does nothing.
      */
     fun pickFreePuzzle(): String? {
-        val (size, difficulty) = bucket.value
-        val pool = entries.filter { it.size == size && it.difficulty == difficulty }
+        val (size, difficulty) = bucket.value ?: return null
+        val pool = puzzles.filter(size, difficulty)
         if (pool.isEmpty()) return null
         val done = solvedIds
         return (pool.filter { it.id !in done }.ifEmpty { pool }).random().id
@@ -132,6 +135,16 @@ class PlayViewModel(
 
     init {
         viewModelScope.launch {
+            // One hop off the main thread; everything after it is cheap projection.
+            withContext(Dispatchers.Default) {
+                stages = LevelLadder.build(puzzles.entries)
+                levelsBySize = puzzles.entries.groupBy { it.size }
+                    .mapValues { (_, g) -> g.map { it.difficulty }.distinct().sorted() }
+            }
+            bucket.value = puzzles.availableSizes.first().let { size ->
+                size to levelsBySize.getValue(size).first()
+            }
+
             combine(
                 progress.observeCompletedIds(),
                 progress.observeInProgressIds(),
@@ -154,18 +167,20 @@ class PlayViewModel(
                         completedCount = levels.count { it.completed },
                     )
                 }
-                val (size, difficulty) = chosen
-                val pool = puzzles.filter(size, difficulty)
-
-                PlayUiState(
-                    freePlay = FreePlayUi(
+                val free = chosen?.let { (size, difficulty) ->
+                    val pool = puzzles.filter(size, difficulty)
+                    FreePlayUi(
                         sizes = puzzles.availableSizes,
                         size = size,
                         difficulties = difficultiesFor(size),
                         difficulty = difficulty,
                         solved = pool.count { it.id in completed },
                         total = pool.size,
-                    ),
+                    )
+                } ?: FreePlayUi()
+
+                PlayUiState(
+                    freePlay = free,
                     stages = projected,
                     next = projected.firstNotNullOfOrNull { s -> s.levels.firstOrNull { it.isNext } },
                     solved = projected.sumOf { it.completedCount },

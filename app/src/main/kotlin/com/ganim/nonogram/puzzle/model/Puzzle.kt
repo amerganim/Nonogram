@@ -129,6 +129,20 @@ data class Puzzle(
 
         private const val ID_BYTES = 10
 
+        /**
+         * One digest per thread, reused.
+         *
+         * `MessageDigest.getInstance` walks the security provider list on every call.
+         * Indexing the 5,000-puzzle pack calls this once per record, and on a Galaxy A15
+         * that provider lookup - not the hashing - was **1.2 seconds on the main
+         * thread**, which is what made the app stutter for its first few seconds.
+         * `digest()` resets the instance, so reuse is safe; the ThreadLocal is there
+         * because the generator tool hashes from several threads at once.
+         */
+        private val digests = ThreadLocal.withInitial { MessageDigest.getInstance("SHA-256") }
+
+        private val HEX = "0123456789abcdef".toCharArray()
+
         fun stableId(width: Int, height: Int, solution: BooleanArray): String =
             stableIdFromBitset(width, height, Grid.toBitset(solution))
 
@@ -145,14 +159,20 @@ data class Puzzle(
             offset: Int = 0,
             length: Int = bitset.size - offset,
         ): String {
-            val digest = MessageDigest.getInstance("SHA-256")
+            val digest = digests.get()!!
             digest.update(width.toByte())
             digest.update(height.toByte())
             digest.update(bitset, offset, length)
             val hash = digest.digest()
-            val sb = StringBuilder(ID_BYTES * 2)
-            for (i in 0 until ID_BYTES) sb.append("%02x".format(hash[i]))
-            return sb.toString()
+            // Hand-rolled hex rather than "%02x".format: that is ten String.format calls
+            // per id, fifty thousand for the pack, and each one parses its format string.
+            val out = CharArray(ID_BYTES * 2)
+            for (i in 0 until ID_BYTES) {
+                val b = hash[i].toInt() and 0xFF
+                out[i * 2] = HEX[b ushr 4]
+                out[i * 2 + 1] = HEX[b and 0x0F]
+            }
+            return String(out)
         }
     }
 }
