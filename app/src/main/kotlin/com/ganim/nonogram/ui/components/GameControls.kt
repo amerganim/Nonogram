@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.ganim.nonogram.ui.theme.LocalBoardColors
 import com.ganim.nonogram.ui.theme.LocalReduceMotion
@@ -105,7 +106,9 @@ fun PrimaryButton(
         Row(
             Modifier
                 .align(Alignment.TopCenter)
-                .offset(y = drop)
+                // Lambda overload: the press animation then runs in the layout phase
+                // instead of recomposing this row on every frame of it.
+                .offset { IntOffset(0, drop.roundToPx()) }
                 .fillMaxWidth()
                 .height(56.dp)
                 .clip(ButtonShape)

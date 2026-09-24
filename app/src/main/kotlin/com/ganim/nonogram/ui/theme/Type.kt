@@ -50,11 +50,15 @@ import androidx.compose.ui.unit.sp
 
 private const val TabularFigures = "tnum"
 
+@Suppress("PrivateResource")
 private val fontProvider = GoogleFont.Provider(
     providerAuthority = "com.google.android.gms.fonts",
     providerPackage = "com.google.android.gms",
     // The app uses non-transitive R classes, so the certificate list is named from
-    // the library that ships it rather than through the app's own R.
+    // the library that ships it rather than through the app's own R. Lint calls
+    // that resource private; referencing it is what Google's own documentation
+    // says to do, and the alternative is pasting their certificate hashes into
+    // this repo and hoping they never rotate.
     certificates = androidx.compose.ui.text.googlefonts.R.array.com_google_android_gms_fonts_certs,
 )
 

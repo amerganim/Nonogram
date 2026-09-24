@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ganim.nonogram.puzzle.model.Difficulty
@@ -138,9 +139,24 @@ private fun DailyExplainer() {
     }
 }
 
+/**
+ * The locale Compose knows about.
+ *
+ * `Locale.getDefault()` read during composition is a snapshot: change the phone's
+ * language and every date on this screen keeps the old one until the process restarts.
+ * Reading it from the configuration makes it observable, so the screen recomposes.
+ */
+@Composable
+private fun currentLocale(): Locale =
+    LocalConfiguration.current.locales.get(0)
+        // Only reached if the configuration carries no locales at all, which leaves
+        // nothing observable to read.
+        ?: @Suppress("NonObservableLocale") Locale.getDefault()
+
 @Composable
 private fun Header(state: DailyUiState) {
     val colors = LocalBoardColors.current
+    val locale = currentLocale()
     Row(
         Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -148,13 +164,13 @@ private fun Header(state: DailyUiState) {
     ) {
         Column {
             Text(
-                state.today.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault()).uppercase(),
+                state.today.dayOfWeek.getDisplayName(TextStyle.FULL, locale).uppercase(locale),
                 style = MaterialTheme.typography.labelMedium,
                 color = colors.textMuted,
             )
             Text(
                 "${state.today.dayOfMonth} " +
-                    state.today.month.getDisplayName(TextStyle.FULL, Locale.getDefault()),
+                    state.today.month.getDisplayName(TextStyle.FULL, locale),
                 style = MaterialTheme.typography.headlineSmall,
                 color = colors.clueText,
             )
@@ -279,6 +295,7 @@ private fun MonthView(
     onPickDay: (CalendarDay) -> Unit,
 ) {
     val colors = LocalBoardColors.current
+    val locale = currentLocale()
     Panel(Modifier.fillMaxWidth()) {
         Row(
             Modifier.fillMaxWidth(),
@@ -287,7 +304,7 @@ private fun MonthView(
         ) {
             MonthArrow(Glyph.BACK, "Previous month", enabled = true, onClick = onPrevious)
             Text(
-                "${state.month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} ${state.month.year}",
+                "${state.month.month.getDisplayName(TextStyle.FULL, locale)} ${state.month.year}",
                 style = MaterialTheme.typography.titleMedium,
                 color = colors.clueText,
             )

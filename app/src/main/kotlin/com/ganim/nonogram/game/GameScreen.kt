@@ -32,6 +32,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -103,9 +105,11 @@ fun GameScreen(
         }
     }
 
-    var viewportWidth by remember { mutableStateOf(0) }
-    var viewportHeight by remember { mutableStateOf(0) }
-    var zoom by remember(state.puzzleId) { mutableStateOf(1f) }
+    // Primitive state holders: these change on every pinch frame, and the boxed
+    // versions allocate an Integer or a Float each time.
+    var viewportWidth by remember { mutableIntStateOf(0) }
+    var viewportHeight by remember { mutableIntStateOf(0) }
+    var zoom by remember(state.puzzleId) { mutableFloatStateOf(1f) }
     var pan by remember(state.puzzleId) { mutableStateOf(Offset.Zero) }
 
     val metrics = remember(state.puzzleId, viewportWidth, viewportHeight, zoom, pan) {
