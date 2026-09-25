@@ -38,12 +38,22 @@ object Sku {
 data class Entitlements(
     val adFree: Boolean = false,
     /**
-     * A purchase Google has accepted but not yet completed - common with the cash and
-     * carrier-billing methods used across the target markets. Not an entitlement yet,
-     * but the UI should say something rather than looking like the payment failed.
+     * Products with a purchase Google has accepted but not yet completed - common with
+     * the cash and carrier-billing methods used across the target markets. Not an
+     * entitlement yet, but the UI should say something rather than looking like the
+     * payment failed.
+     *
+     * Per product rather than one flag, so the row for the product actually waiting can
+     * say so, and the other one stays buyable.
      */
-    val hasPendingPurchase: Boolean = false,
-)
+    val pendingProducts: Set<String> = emptySet(),
+) {
+    val hasPendingPurchase: Boolean get() = pendingProducts.isNotEmpty()
+}
+
+/** The localized price Play shows for [sku], or null until its details have loaded. */
+fun Map<String, ProductDetails>.formattedPrice(sku: String): String? =
+    get(sku)?.oneTimePurchaseOfferDetails?.formattedPrice
 
 /**
  * In-app purchases (build plan 8.3).
@@ -106,6 +116,9 @@ class PlayBillingManager(
     override fun connect() {
         if (client.isReady) {
             refresh()
+            // The first load can fail on a bad connection while setup succeeded. Without
+            // a retry the store would stay unpriced, and so unbuyable, until a relaunch.
+            if (_products.value.isEmpty()) scope.launch { loadProducts() }
             return
         }
         client.startConnection(object : BillingClientStateListener {
@@ -134,17 +147,17 @@ class PlayBillingManager(
             if (result.billingResult.responseCode != BillingClient.BillingResponseCode.OK) return@launch
 
             var adFree = false
-            var pending = false
+            val pending = mutableSetOf<String>()
             result.purchasesList.forEach { purchase ->
                 when (purchase.purchaseState) {
                     Purchase.PurchaseState.PURCHASED -> {
                         if (Sku.REMOVE_ADS in purchase.products) adFree = true
                         handlePurchase(purchase, grantConsumables = false)
                     }
-                    Purchase.PurchaseState.PENDING -> pending = true
+                    Purchase.PurchaseState.PENDING -> pending += purchase.products
                 }
             }
-            _entitlements.value = Entitlements(adFree = adFree, hasPendingPurchase = pending)
+            _entitlements.value = Entitlements(adFree = adFree, pendingProducts = pending)
         }
     }
 
@@ -172,10 +185,18 @@ class PlayBillingManager(
      */
     private suspend fun handlePurchase(purchase: Purchase, grantConsumables: Boolean = true) {
         if (purchase.purchaseState == Purchase.PurchaseState.PENDING) {
-            _entitlements.value = _entitlements.value.copy(hasPendingPurchase = true)
+            _entitlements.value = _entitlements.value.let {
+                it.copy(pendingProducts = it.pendingProducts + purchase.products)
+            }
             return
         }
         if (purchase.purchaseState != Purchase.PurchaseState.PURCHASED) return
+
+        // A pending purchase that completes while the app is open arrives here through
+        // the listener, not through a refresh, so this is where it stops being pending.
+        _entitlements.value = _entitlements.value.let {
+            it.copy(pendingProducts = it.pendingProducts - purchase.products.toSet())
+        }
 
         when {
             Sku.HINT_PACK_25 in purchase.products -> {

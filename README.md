@@ -252,7 +252,13 @@ Two things worth knowing before anyone optimises further:
       build** rather than silently shipping test ads
 - [ ] Rewarded ads grant reliably — needs a device with a real AdMob account
 - [ ] `remove_ads` purchase, restore-on-reinstall and pending purchases — needs Play
-      test tracks
+      test tracks. The entry points are in: **Remove ads** and **25 hints** rows at the
+      bottom of Settings, and the pack beside the rewarded ad when hints run out. Each
+      shows Play's localized price, is not tappable until that price has loaded, and
+      says "Payment pending" for a cash or carrier payment still settling. The state
+      logic is unit-tested (`StoreOffersTest`); **no purchase has been made end to end
+      yet** — that still needs the Play Console products, a test track and a licence
+      tester on a real device.
 
 ### Phase 2 acceptance criteria
 

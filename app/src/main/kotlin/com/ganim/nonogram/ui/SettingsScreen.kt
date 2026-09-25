@@ -27,6 +27,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.ganim.nonogram.data.repo.Settings
+import com.ganim.nonogram.monetize.HintEconomy
+import com.ganim.nonogram.monetize.Offer
+import com.ganim.nonogram.monetize.Sku
+import com.ganim.nonogram.ui.components.AccentChip
+import com.ganim.nonogram.ui.components.Chip
 import com.ganim.nonogram.ui.components.GameIcon
 import com.ganim.nonogram.ui.components.Glyph
 import com.ganim.nonogram.ui.components.Meter
@@ -41,7 +46,8 @@ import com.ganim.nonogram.ui.theme.LocalBoardColors
  * real choice rather than an afterthought (7).
  *
  * How to play leads, because someone who opens Settings mid-puzzle is usually looking
- * for exactly that.
+ * for exactly that. The two purchases (8.3) come last: they are the only way to buy
+ * either, but nobody opens Settings to be sold something.
  */
 @Composable
 fun SettingsScreen(
@@ -53,6 +59,9 @@ fun SettingsScreen(
     onHapticsChanged: (Boolean) -> Unit,
     onThemeChanged: (Boolean?) -> Unit,
     onHowToPlay: () -> Unit,
+    removeAdsOffer: Offer,
+    hintPackOffer: Offer,
+    onBuy: (sku: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalBoardColors.current
@@ -154,6 +163,85 @@ fun SettingsScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 Tally(dailyCount, "daily", colors.success)
                 Tally(pictureCount, "pictures", colors.collection)
+            }
+        }
+
+        PurchaseRow(
+            glyph = if (removeAdsOffer == Offer.Owned) Glyph.CHECK else Glyph.LOCK_OPEN,
+            tint = colors.success,
+            title = if (removeAdsOffer == Offer.Owned) "Ads removed" else "Remove ads",
+            subtitle = when (removeAdsOffer) {
+                Offer.Owned -> "Thank you for supporting the game."
+                Offer.Pending -> "Payment pending. Ads go away as soon as Google confirms it."
+                else -> "No more ads between puzzles. Buy once, keep it on every device."
+            },
+            offer = removeAdsOffer,
+            onBuy = { onBuy(Sku.REMOVE_ADS) },
+        )
+
+        PurchaseRow(
+            glyph = Glyph.SPARK,
+            tint = colors.info,
+            title = "${HintEconomy.HINT_PACK_SIZE} hints",
+            subtitle = if (hintPackOffer == Offer.Pending) {
+                "Payment pending. The hints arrive as soon as Google confirms it."
+            } else {
+                "They never expire, and your free daily hints are always used first."
+            },
+            offer = hintPackOffer,
+            onBuy = { onBuy(Sku.HINT_PACK_25) },
+        )
+    }
+}
+
+/**
+ * A purchase, laid out like [ActionRow] but ending in its state instead of an arrow.
+ *
+ * Tappable only when there is something to buy. Before Play has answered there is no
+ * price, and a purchase launched without product details silently does nothing - so the
+ * row says it is waiting rather than pretending to be a button.
+ */
+@Composable
+private fun PurchaseRow(
+    glyph: Glyph,
+    tint: Color,
+    title: String,
+    subtitle: String,
+    offer: Offer,
+    onBuy: () -> Unit,
+) {
+    val colors = LocalBoardColors.current
+    Panel(
+        Modifier.fillMaxWidth(),
+        tint = tint.takeIf { offer.canBuy },
+        onClick = onBuy.takeIf { offer.canBuy },
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(13.dp),
+        ) {
+            Box(
+                Modifier
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(tint.copy(alpha = BADGE_ALPHA)),
+                contentAlignment = Alignment.Center,
+            ) {
+                GameIcon(glyph, tint, size = 22.dp)
+            }
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium, color = colors.clueText)
+                Text(
+                    if (offer == Offer.Unavailable) "Waiting for Google Play…" else subtitle,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = colors.textMuted,
+                )
+            }
+            when (offer) {
+                is Offer.ForSale -> AccentChip(offer.price)
+                Offer.Pending -> Chip("Pending", colors.info)
+                Offer.Owned -> Chip("Owned", colors.success)
+                Offer.Unavailable -> Unit
             }
         }
     }

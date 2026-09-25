@@ -52,6 +52,9 @@ import com.ganim.nonogram.data.repo.Settings
 import com.ganim.nonogram.game.GameScreen
 import com.ganim.nonogram.game.GameViewModel
 import com.ganim.nonogram.monetize.AdTrigger
+import com.ganim.nonogram.monetize.Sku
+import com.ganim.nonogram.monetize.StoreOffers
+import com.ganim.nonogram.monetize.formattedPrice
 import com.ganim.nonogram.progression.PlayScreen
 import com.ganim.nonogram.progression.PlayViewModel
 import com.ganim.nonogram.monetize.RewardPolicy
@@ -185,8 +188,21 @@ fun NonogramApp(container: AppContainer) {
     // never see one. The cache was already being written; nothing read it.
     val cachedAdFree by container.monetization.cachedAdFree.collectAsState(initial = false)
     val wallet by container.monetization.wallet.collectAsState(initial = null)
+    val products by container.billing.products.collectAsState()
     val scope = rememberCoroutineScope()
     val activity = LocalActivity.current
+
+    // Build plan 8.3. Without product details there is no price and nothing to launch,
+    // and the offers below then report Unavailable, so nothing calls this uselessly.
+    val removeAdsOffer = StoreOffers.removeAds(
+        entitlements = entitlements,
+        price = products.formattedPrice(Sku.REMOVE_ADS),
+        adFree = entitlements.adFree || cachedAdFree,
+    )
+    val hintPackOffer = StoreOffers.hintPack(entitlements, products.formattedPrice(Sku.HINT_PACK_25))
+    val buy: (String) -> Unit = { sku ->
+        activity?.let { host -> container.billing.launchPurchase(host, sku) }
+    }
 
     NonogramTheme(
         darkTheme = settings.darkThemeOverride
@@ -268,6 +284,9 @@ fun NonogramApp(container: AppContainer) {
                 }
 
                 composable(Routes.SETTINGS) {
+                    // Retries a product load that failed at launch, so the store does
+                    // not stay unpriced for the whole session after one bad connection.
+                    LaunchedEffect(Unit) { container.billing.connect() }
                     SettingsScreen(
                         settings = settings,
                         completedCount = completedCount,
@@ -282,6 +301,9 @@ fun NonogramApp(container: AppContainer) {
                             scope.launch { container.settings.setDarkThemeOverride(dark) }
                         },
                         onHowToPlay = { navController.navigate(Routes.HOW_TO_PLAY) },
+                        removeAdsOffer = removeAdsOffer,
+                        hintPackOffer = hintPackOffer,
+                        onBuy = buy,
                     )
                 }
 
@@ -361,6 +383,8 @@ fun NonogramApp(container: AppContainer) {
                             val host = activity ?: return@GameScreen false
                             RewardPolicy.shouldGrant(container.ads.showRewarded(host))
                         },
+                        hintPackOffer = hintPackOffer,
+                        onBuyHintPack = { buy(Sku.HINT_PACK_25) },
                         onWatchAdForLife = {
                             val host = activity ?: return@GameScreen false
                             RewardPolicy.shouldGrant(container.ads.showRewarded(host))

@@ -49,6 +49,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
+import com.ganim.nonogram.monetize.HintEconomy
+import com.ganim.nonogram.monetize.Offer
 import com.ganim.nonogram.ui.components.Capsule
 import com.ganim.nonogram.ui.components.GameIcon
 import com.ganim.nonogram.ui.components.GhostButton
@@ -78,6 +80,9 @@ fun GameScreen(
     /** Called when the results card is dismissed - the only interstitial moment (8.2). */
     onResultsDismissed: suspend () -> Unit = {},
     hintsRemaining: Int = 0,
+    /** The `hint_pack_25` purchase, offered alongside the ad when hints run out (8.3). */
+    hintPackOffer: Offer = Offer.Unavailable,
+    onBuyHintPack: () -> Unit = {},
 ) {
     // Held as State, not read with `by`. Reading the board during composition is what
     // made every painted cell recompose the whole screen; the canvas reads it in the
@@ -92,6 +97,15 @@ fun GameScreen(
     val view = LocalView.current
     val scope = rememberCoroutineScope()
     var offeringAdForHint by remember { mutableStateOf(false) }
+    var outOfHints by remember { mutableStateOf(false) }
+    val watchAdForHint: () -> Unit = {
+        outOfHints = false
+        scope.launch {
+            offeringAdForHint = true
+            if (onWatchAdForHint()) viewModel.useRewardedHint()
+            offeringAdForHint = false
+        }
+    }
 
     // Build plan 5.2: haptics on every cell state change, disableable in settings.
     LaunchedEffect(viewModel) {
@@ -165,12 +179,16 @@ fun GameScreen(
             onHint = {
                 scope.launch {
                     when (viewModel.useHint()) {
-                        // Out of hints: offer a rewarded ad. If no ad is available the
-                        // reward is granted anyway (8.2), so this never dead-ends.
+                        // Out of hints: offer a rewarded ad, and the pack beside it when
+                        // Play has priced one. With nothing to choose between, go straight
+                        // to the ad. If no ad is available the reward is granted anyway
+                        // (8.2), so this never dead-ends.
                         HintResult.NeedsMoreHints -> {
-                            offeringAdForHint = true
-                            if (onWatchAdForHint()) viewModel.useRewardedHint()
-                            offeringAdForHint = false
+                            if (hintPackOffer == Offer.Unavailable) {
+                                watchAdForHint()
+                            } else {
+                                outOfHints = true
+                            }
                         }
                         HintResult.Revealed, HintResult.NothingToReveal -> Unit
                     }
@@ -265,6 +283,19 @@ fun GameScreen(
                             scaleX = scale
                             scaleY = scale
                         },
+                )
+            }
+
+            if (outOfHints && state.isPlayable) {
+                OutOfHintsCard(
+                    packOffer = hintPackOffer,
+                    onWatchAd = watchAdForHint,
+                    onBuyPack = {
+                        outOfHints = false
+                        onBuyHintPack()
+                    },
+                    onDismiss = { outOfHints = false },
+                    modifier = Modifier.align(Alignment.Center),
                 )
             }
 
@@ -601,6 +632,67 @@ private fun OutOfLivesCard(
             onFace = colors.onAccent,
         )
         GhostButton("Start over", onRestart, Modifier.fillMaxWidth(), glyph = Glyph.UNDO)
+    }
+}
+
+/**
+ * The ad and the pack, side by side.
+ *
+ * The ad leads: it is free, and it is what most players will pick. The pack is the quiet
+ * option under it, and when a payment for one is still settling it says so instead of
+ * offering a second.
+ */
+@Composable
+private fun OutOfHintsCard(
+    packOffer: Offer,
+    onWatchAd: () -> Unit,
+    onBuyPack: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalBoardColors.current
+    val shape = RoundedCornerShape(28.dp)
+    Column(
+        modifier
+            .padding(horizontal = 24.dp)
+            .clip(shape)
+            .background(colors.raised)
+            .border(1.dp, colors.stroke, shape)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(13.dp),
+    ) {
+        GameIcon(Glyph.SPARK, colors.info, size = 30.dp)
+        Text("Out of hints", style = MaterialTheme.typography.headlineSmall, color = colors.clueText)
+        Text(
+            "${HintEconomy.FREE_PER_DAY} free hints arrive at midnight.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.textMuted,
+            textAlign = TextAlign.Center,
+        )
+        PrimaryButton(
+            text = "Watch an ad for a hint",
+            onClick = onWatchAd,
+            modifier = Modifier.fillMaxWidth(),
+            glyph = Glyph.PLAY,
+        )
+        when (packOffer) {
+            is Offer.ForSale -> GhostButton(
+                text = "${HintEconomy.HINT_PACK_SIZE} hints · ${packOffer.price}",
+                onClick = onBuyPack,
+                modifier = Modifier.fillMaxWidth(),
+                glyph = Glyph.SPARK,
+                tint = colors.info,
+            )
+            Offer.Pending -> Text(
+                "Your hint pack payment is pending. The hints arrive as soon as Google confirms it.",
+                style = MaterialTheme.typography.labelLarge,
+                color = colors.info,
+                textAlign = TextAlign.Center,
+            )
+            Offer.Owned, Offer.Unavailable -> Unit
+        }
+        GhostButton("Not now", onDismiss, Modifier.fillMaxWidth())
     }
 }
 
